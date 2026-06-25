@@ -1,0 +1,2 @@
+recursive-include babyhouse_pos_bridge *.css *.csv *.html *.ico *.js *.json *.md *.png *.py *.svg *.txt
+recursive-exclude babyhouse_pos_bridge *.pyc
