@@ -1,0 +1,13 @@
+[project]
+name = "babyhouse-pos-bridge"
+version = "0.1.0"
+description = "Idempotent ERPNext bridge for Baby House POS"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["flit_core>=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "babyhouse_pos_bridge"
