@@ -73,7 +73,7 @@ class ExchangeRateRevaluation(Document):
 
 	def validate_mandatory(self):
 		if not (self.company and self.posting_date):
-			frappe.throw(_("Please select Company and Posting Date to getting entries"))
+			frappe.throw(_("Please select Company and Posting Date to get entries"))
 
 	def before_submit(self):
 		self.remove_accounts_without_gain_loss()
@@ -350,12 +350,14 @@ class ExchangeRateRevaluation(Document):
 		zero_balance_jv = self.make_jv_for_zero_balance()
 		if zero_balance_jv:
 			frappe.msgprint(
-				f"Zero Balance Journal: {get_link_to_form('Journal Entry', zero_balance_jv.name)}"
+				_("Zero Balance Journal: {0}").format(get_link_to_form("Journal Entry", zero_balance_jv.name))
 			)
 
 		revaluation_jv = self.make_jv_for_revaluation()
 		if revaluation_jv:
-			frappe.msgprint(f"Revaluation Journal: {get_link_to_form('Journal Entry', revaluation_jv.name)}")
+			frappe.msgprint(
+				_("Revaluation Journal: {0}").format(get_link_to_form("Journal Entry", revaluation_jv.name))
+			)
 
 		return {
 			"revaluation_jv": revaluation_jv.name if revaluation_jv else None,
