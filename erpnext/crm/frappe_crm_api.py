@@ -165,7 +165,7 @@ def validate_frappe_crm_sync():
 	CRMSettings = frappe.get_single("CRM Settings")
 	if not CRMSettings.enable_frappe_crm_data_synchronization:
 		frappe.throw(
-			_("Frappe CRM data synchronization is not enabled on ERPNext. Contact System Manager of ERPNext.")
+			_("Frappe CRM data synchronization is not enabled on HoloERP. Contact System Manager of HoloERP.")
 		)
 
 	allowed_users = [d.user for d in CRMSettings.allowed_users]
@@ -173,7 +173,7 @@ def validate_frappe_crm_sync():
 	if frappe.session.user not in allowed_users:
 		frappe.throw(
 			_(
-				"User not allowed to synchronize data from Frappe CRM on ERPNext. Contact System Manager of ERPNext."
+				"User not allowed to synchronize data from Frappe CRM on HoloERP. Contact System Manager of HoloERP."
 			),
 			exc=frappe.PermissionError,
 		)

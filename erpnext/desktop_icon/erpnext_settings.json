@@ -7,7 +7,7 @@
  "icon": "setting",
  "icon_type": "Link",
  "idx": 10,
- "label": "ERPNext Settings",
+ "label": "HoloERP Settings",
  "link_to": "ERPNext Settings",
  "link_type": "Workspace Sidebar",
  "logo_url": "",

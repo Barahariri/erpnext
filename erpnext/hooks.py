@@ -1,19 +1,19 @@
 app_name = "erpnext"
-app_title = "ERPNext"
+app_title = "HoloERP"
 app_publisher = "Frappe Technologies Pvt. Ltd."
 app_description = """ERP made simple"""
 app_icon = "fa fa-th"
-app_color = "#e74c3c"
+app_color = "#0089C9"
 app_email = "hello@frappe.io"
 app_license = "GNU General Public License (v3)"
-source_link = "https://github.com/frappe/erpnext"
-app_logo_url = "/assets/erpnext/images/erpnext-logo.svg"
+source_link = "https://dashboard.babyhousekw.com"
+app_logo_url = "/assets/erpnext/images/holoerp-logo.png"
 app_home = "/desk"
 
 add_to_apps_screen = [
 	{
 		"name": app_name,
-		"logo": "/assets/erpnext/images/erpnext-logo.svg",
+		"logo": "/assets/erpnext/images/holoerp-logo.png",
 		"title": app_title,
 		"route": app_home,
 		"has_permission": "erpnext.check_app_permission",
@@ -112,8 +112,8 @@ calendars = ["Task", "Work Order", "Sales Order", "Holiday List", "ToDo"]
 website_generators = ["BOM", "Sales Partner"]
 
 website_context = {
-	"favicon": "/assets/erpnext/images/erpnext-favicon.svg",
-	"splash_image": "/assets/erpnext/images/erpnext-logo.svg",
+	"favicon": "/assets/erpnext/images/holoerp-favicon.png",
+	"splash_image": "/assets/erpnext/images/holoerp-logo.png",
 }
 
 # nosemgrep
@@ -514,14 +514,12 @@ scheduler_events = {
 	],
 }
 
-email_brand_image = "assets/erpnext/images/erpnext-logo.jpg"
+email_brand_image = "assets/erpnext/images/holoerp-logo.png"
 
 default_mail_footer = """
 	<span>
 		Sent via
-		<a class="text-muted" href="https://frappe.io/erpnext?source=via_email_footer" target="_blank">
-			ERPNext
-		</a>
+		<span class="text-muted">HoloERP</span>
 	</span>
 """
 
