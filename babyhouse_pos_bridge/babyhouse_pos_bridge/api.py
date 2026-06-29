@@ -90,7 +90,7 @@ def upsert_pos_return(idempotency_key=None, **kwargs):
         return _result(existing, False)
     original = data.get("original_erpnext_invoice")
     if not original or not frappe.db.exists("Sales Invoice", original):
-        frappe.throw(_("The original ERPNext Sales Invoice must be synchronized first"))
+        frappe.throw(_("The original HoloERP Sales Invoice must be synchronized first"))
     source = frappe.get_doc("Sales Invoice", original)
     posting = get_datetime(data.get("posting_datetime"))
     invoice = frappe.copy_doc(source)
@@ -156,7 +156,7 @@ def upsert_pos_session(idempotency_key=None, session=None):
 
     opening_name = frappe.db.get_value("POS Opening Entry", "custom_babyhouse_session_uuid", data.get("uuid"), "name")
     if not opening_name:
-        frappe.throw(_("The ERPNext POS Opening Entry must be synchronized first"))
+        frappe.throw(_("The HoloERP POS Opening Entry must be synchronized first"))
     opened, closed = get_datetime(data.get("opened_at")), get_datetime(data.get("closed_at"))
     payments = data.get("payment_totals") or {}
     doc = frappe.get_doc({

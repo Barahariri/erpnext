@@ -1,7 +1,7 @@
 [project]
 name = "babyhouse-pos-bridge"
 version = "0.1.0"
-description = "Idempotent ERPNext bridge for Baby House POS"
+description = "Idempotent HoloERP bridge for Baby House POS"
 requires-python = ">=3.10"
 dependencies = []
 
