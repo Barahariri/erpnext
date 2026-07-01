@@ -28,7 +28,6 @@ from erpnext.manufacturing.doctype.bom.bom import (
 from erpnext.setup.doctype.brand.brand import get_brand_defaults
 from erpnext.setup.doctype.item_group.item_group import get_item_group_defaults
 from erpnext.stock.get_item_details import (
-	ItemDetailsCtx,
 	get_barcode_data,
 	get_bin_details,
 	get_conversion_factor,
@@ -165,6 +164,15 @@ class StockEntry(StockController, SubcontractingInwardController):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self._configure_purpose_class()
+		self.status_updater = [
+			{
+				"source_dt": "Stock Entry Detail",
+				"target_dt": "Pick List Item",
+				"join_field": "pick_list_item",
+				"target_field": "transferred_qty",
+				"source_field": "transfer_qty",
+			}
+		]
 
 		if self.subcontracting_inward_order:
 			self.subcontract_data = frappe._dict(
@@ -350,6 +358,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 		self.delink_asset_repair_sabb()
 		self.validate_closed_subcontracting_order()
 		self.update_subcontracting_order_status()
+		self.update_pick_list_status()
 		self.cancel_stock_reserve_for_wip_and_fg()
 
 		if self.work_order and self.purpose == "Material Consumption for Manufacture":
@@ -1189,7 +1198,7 @@ class StockEntry(StockController, SubcontractingInwardController):
 		return reserved_work_orders
 
 	@frappe.whitelist()
-	def get_item_details(self, args: ItemDetailsCtx | None = None, for_update: bool = False):
+	def get_item_details(self, args: frappe._dict | None = None, for_update: bool = False):
 		item = self._fetch_item_data(args)
 		item_group_defaults = get_item_group_defaults(item.name, self.company)
 		brand_defaults = get_brand_defaults(item.name, self.company)
@@ -1484,6 +1493,9 @@ class StockEntry(StockController, SubcontractingInwardController):
 
 	def update_pick_list_status(self):
 		from erpnext.stock.doctype.pick_list.pick_list import update_pick_list_status
+
+		if self.pick_list:
+			self.update_qty()
 
 		update_pick_list_status(self.pick_list)
 

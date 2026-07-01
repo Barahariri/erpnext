@@ -16,7 +16,7 @@ from frappe.website.website_generator import WebsiteGenerator
 import erpnext
 from erpnext.setup.utils import get_exchange_rate
 from erpnext.stock.doctype.item.item import get_item_details
-from erpnext.stock.get_item_details import ItemDetailsCtx, get_conversion_factor, get_price_list_rate
+from erpnext.stock.get_item_details import get_conversion_factor, get_price_list_rate
 
 form_grid_templates = {"items": "templates/form_grid/item_grid.html"}
 
@@ -739,7 +739,7 @@ class BOM(WebsiteGenerator):
 				)
 			)
 
-	def check_recursion(self, bom_list=None):
+	def check_recursion(self):
 		"""Check whether recursion occurs in any bom"""
 		bom_list = self.traverse_tree()
 		child_items = frappe.get_all(
@@ -861,21 +861,30 @@ class BOM(WebsiteGenerator):
 
 		self.append("items", row)
 
-	def traverse_tree(self, bom_list=None):
-		count = 0
-		if not bom_list:
-			bom_list = []
+	def traverse_tree(self):
+		"""Return this BOM and every descendant BOM. The whole sub-tree is fetched in one recursive
+		CTE (frappe.qb) instead of a query-per-node walk; the only caller (check_recursion) uses the
+		result purely as a membership set. Portable across postgres and mariadb 10.2+."""
+		bom_item = frappe.qb.DocType("BOM Item")
+		tree = frappe.qb.Table("bom_tree")
 
-		if self.name not in bom_list:
-			bom_list.append(self.name)
+		seed = (
+			frappe.qb.from_(bom_item)
+			.select(bom_item.bom_no.as_("bom"))
+			.where((bom_item.parent == self.name) & (bom_item.bom_no != "") & (bom_item.parenttype == "BOM"))
+		)
+		recursion = (
+			frappe.qb.from_(bom_item)
+			.join(tree)
+			.on(bom_item.parent == tree.bom)
+			.select(bom_item.bom_no)
+			.where((bom_item.bom_no != "") & (bom_item.parenttype == "BOM"))
+		)
+		descendants = (
+			frappe.qb.with_(seed + recursion, "bom_tree", recursive=True).from_(tree).select(tree.bom)
+		).run(pluck=True)
 
-		while count < len(bom_list):
-			for child_bom in _get_bom_children(bom_list[count]):
-				if child_bom not in bom_list:
-					bom_list.append(child_bom)
-			count += 1
-		bom_list.reverse()
-		return bom_list
+		return [self.name, *descendants]
 
 	def company_currency(self):
 		return erpnext.get_company_currency(self.company)
@@ -1072,7 +1081,7 @@ def _get_price_list_item_rate(args, bom_doc):
 	if not bom_doc.buying_price_list:
 		frappe.throw(_("Please select Price List"))
 
-	ctx = ItemDetailsCtx(
+	ctx = frappe._dict(
 		{
 			"doctype": "BOM",
 			"price_list": bom_doc.buying_price_list,
