@@ -23,6 +23,12 @@ CUSTOM_FIELDS = {
         {"fieldname": "custom_babyhouse_idempotency_key", "label": "Baby House Idempotency Key", "fieldtype": "Data", "unique": 1, "read_only": 1},
         {"fieldname": "custom_babyhouse_session_uuid", "label": "Baby House Session UUID", "fieldtype": "Data", "read_only": 1},
     ],
+    "Payment Entry": [
+        {"fieldname": "custom_babyhouse_idempotency_key", "label": "Baby House Idempotency Key", "fieldtype": "Data", "unique": 1, "read_only": 1},
+    ],
+    "Customer": [
+        {"fieldname": "custom_babyhouse_customer_id", "label": "Baby House Customer ID", "fieldtype": "Data", "unique": 1, "read_only": 1},
+    ],
     "Employee": [
         {"fieldname": "custom_babyhouse_cashier_uuid", "label": "Baby House Cashier UUID", "fieldtype": "Data", "unique": 1, "read_only": 1},
         {"fieldname": "custom_babyhouse_employee_code", "label": "Baby House Employee Code", "fieldtype": "Data", "unique": 1, "read_only": 1},

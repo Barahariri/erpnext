@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, get_datetime
+from frappe.utils import getdate, get_datetime, now_datetime
 
 
 def _value(value):
@@ -171,6 +171,173 @@ def upsert_pos_session(idempotency_key=None, session=None):
 
 
 @frappe.whitelist()
+def upsert_ecommerce_sale(idempotency_key=None, sale=None):
+    data = _value(sale)
+    if existing := _existing("Sales Invoice", idempotency_key):
+        return _result(existing, False)
+
+    company = data.get("company") or frappe.defaults.get_global_default("company")
+    warehouse = data.get("warehouse")
+    customer = _get_or_create_ecommerce_customer(data)
+    posting = get_datetime(data.get("posting_datetime") or now_datetime())
+    items = []
+
+    for row in data.get("items", []):
+        if not row.get("sku"):
+            frappe.throw(_("Every ecommerce invoice item must include an item SKU"))
+        items.append({
+            "item_code": row.get("sku"),
+            "item_name": row.get("name") or row.get("sku"),
+            "qty": row.get("quantity") or 0,
+            "rate": row.get("rate") or 0,
+            "warehouse": warehouse,
+            "cost_center": data.get("cost_center"),
+            "discount_amount": row.get("discount") or 0,
+        })
+
+    if not items:
+        frappe.throw(_("Ecommerce invoice must contain at least one item"))
+
+    invoice_data = {
+        "doctype": "Sales Invoice",
+        "customer": customer,
+        "company": company,
+        "currency": data.get("currency"),
+        "update_stock": 1,
+        "set_warehouse": warehouse,
+        "posting_date": getdate(posting),
+        "posting_time": posting.time(),
+        "set_posting_time": 1,
+        "custom_babyhouse_idempotency_key": idempotency_key,
+        "custom_babyhouse_source_channel": data.get("source_channel") or "web",
+        "custom_babyhouse_server_invoice": data.get("order_number"),
+        "remarks": frappe.as_json(data.get("metadata") or {}),
+        "items": items,
+    }
+
+    shipping_total = float(data.get("shipping_total") or 0)
+    if shipping_total > 0 and data.get("shipping_income_account"):
+        invoice_data["taxes"] = [{
+            "charge_type": "Actual",
+            "account_head": data.get("shipping_income_account"),
+            "description": _("Shipping"),
+            "tax_amount": shipping_total,
+        }]
+
+    invoice = frappe.get_doc(invoice_data).insert(ignore_permissions=True)
+    invoice.submit()
+    return _result(invoice, True)
+
+
+@frappe.whitelist()
+def upsert_ecommerce_payment(idempotency_key=None, payment=None):
+    data = _value(payment)
+    if existing := _existing("Payment Entry", idempotency_key):
+        return _result(existing, False)
+
+    invoice_name = data.get("sales_invoice")
+    if not invoice_name or not frappe.db.exists("Sales Invoice", invoice_name):
+        frappe.throw(_("The HoloERP ecommerce Sales Invoice must be synchronized before payment"))
+
+    invoice = frappe.get_doc("Sales Invoice", invoice_name)
+    payments = data.get("payments") or []
+    amount = sum(float(row.get("amount") or 0) for row in payments)
+    if amount <= 0:
+        frappe.throw(_("Payment amount must be greater than zero"))
+
+    paid_to = data.get("default_payment_account")
+    if not paid_to:
+        frappe.throw(_("A default payment account is required for ecommerce payments"))
+
+    posting = get_datetime((payments[0] or {}).get("paid_at") if payments else now_datetime())
+    doc = frappe.get_doc({
+        "doctype": "Payment Entry",
+        "payment_type": "Receive",
+        "party_type": "Customer",
+        "party": invoice.customer,
+        "company": data.get("company") or invoice.company,
+        "posting_date": getdate(posting),
+        "paid_amount": amount,
+        "received_amount": amount,
+        "paid_from": data.get("receivable_account") or invoice.debit_to,
+        "paid_to": paid_to,
+        "reference_no": data.get("order_number") or idempotency_key,
+        "reference_date": getdate(posting),
+        "custom_babyhouse_idempotency_key": idempotency_key,
+        "references": [{
+            "reference_doctype": "Sales Invoice",
+            "reference_name": invoice.name,
+            "allocated_amount": min(amount, float(invoice.outstanding_amount or amount)),
+        }],
+    }).insert(ignore_permissions=True)
+    doc.submit()
+    return _result(doc, True)
+
+
+@frappe.whitelist()
+def upsert_ecommerce_return(idempotency_key=None, **kwargs):
+    data = _value(kwargs.get("return"))
+    if existing := _existing("Sales Invoice", idempotency_key):
+        return _result(existing, False)
+
+    original = data.get("original_sales_invoice")
+    if not original or not frappe.db.exists("Sales Invoice", original):
+        frappe.throw(_("The original HoloERP ecommerce Sales Invoice must be synchronized first"))
+
+    source = frappe.get_doc("Sales Invoice", original)
+    posting = get_datetime(data.get("posting_datetime") or now_datetime())
+    invoice = frappe.copy_doc(source)
+    invoice.name = None
+    invoice.is_return = 1
+    invoice.return_against = original
+    invoice.posting_date = getdate(posting)
+    invoice.posting_time = posting.time()
+    invoice.set_posting_time = 1
+    invoice.custom_babyhouse_idempotency_key = idempotency_key
+    invoice.custom_babyhouse_source_channel = "web"
+    invoice.custom_babyhouse_server_invoice = data.get("refund_number")
+    invoice.remarks = data.get("reason")
+    invoice.set("items", [])
+    for row in data.get("items", []):
+        invoice.append("items", {
+            "item_code": row.get("sku"),
+            "qty": -abs(row.get("quantity") or 0),
+            "rate": row.get("rate") or 0,
+            "warehouse": data.get("warehouse"),
+        })
+    invoice.insert(ignore_permissions=True)
+    invoice.submit()
+    return _result(invoice, True)
+
+
+def _get_or_create_ecommerce_customer(data):
+    configured = data.get("default_customer")
+    customer_data = data.get("customer") or {}
+    customer_name = customer_data.get("name") or customer_data.get("phone") or configured
+
+    if customer_data.get("phone"):
+        existing = frappe.db.get_value("Customer", "mobile_no", customer_data.get("phone"), "name")
+        if existing:
+            return existing
+
+    if configured and frappe.db.exists("Customer", configured):
+        return configured
+
+    if not customer_name:
+        frappe.throw(_("A customer or default customer is required for ecommerce invoices"))
+
+    customer = frappe.get_doc({
+        "doctype": "Customer",
+        "customer_name": customer_name,
+        "customer_type": "Individual",
+        "mobile_no": customer_data.get("phone"),
+        "email_id": customer_data.get("email"),
+        "custom_babyhouse_customer_id": customer_data.get("id"),
+    }).insert(ignore_permissions=True)
+    return customer.name
+
+
+@frappe.whitelist()
 def pos_sync_audit(idempotency_keys=None, limit=500):
     keys = _value(idempotency_keys)
     if not isinstance(keys, list):
@@ -202,7 +369,7 @@ def _find_by_idempotency_key(key):
         employee_name = frappe.db.get_value("Employee", "custom_babyhouse_cashier_uuid", cashier_uuid, "name")
         return frappe.get_doc("Employee", employee_name) if employee_name else None
 
-    for doctype in ["Sales Invoice", "POS Opening Entry", "POS Closing Entry", "Journal Entry"]:
+    for doctype in ["Sales Invoice", "Payment Entry", "POS Opening Entry", "POS Closing Entry", "Journal Entry"]:
         if doc := _existing(doctype, key):
             return doc
     return None
@@ -210,7 +377,7 @@ def _find_by_idempotency_key(key):
 
 def _orphan_pos_documents(known_keys, limit):
     rows = []
-    for doctype in ["Sales Invoice", "POS Opening Entry", "POS Closing Entry", "Journal Entry"]:
+    for doctype in ["Sales Invoice", "Payment Entry", "POS Opening Entry", "POS Closing Entry", "Journal Entry"]:
         rows.extend(_get_all_pos_documents(doctype, known_keys, limit - len(rows)))
         if len(rows) >= limit:
             break
