@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, get_datetime, now_datetime
+from frappe.utils import getdate, get_datetime, now_datetime, nowdate
 
 
 def _value(value):
@@ -10,7 +10,7 @@ def _value(value):
 
 
 def _existing(doctype: str, key: str):
-    name = frappe.db.get_value(doctype, "custom_babyhouse_idempotency_key", key, "name")
+    name = frappe.db.get_value(doctype, {"custom_babyhouse_idempotency_key": key}, "name")
     return frappe.get_doc(doctype, name) if name else None
 
 
@@ -33,7 +33,7 @@ def upsert_cashier(idempotency_key=None, cashier=None):
     if not idempotency_key or not data.get("uuid") or not data.get("email"):
         frappe.throw(_("idempotency_key, cashier uuid, and email are required"))
 
-    employee_name = frappe.db.get_value("Employee", "custom_babyhouse_cashier_uuid", data["uuid"], "name")
+    employee_name = frappe.db.get_value("Employee", {"custom_babyhouse_cashier_uuid": data["uuid"]}, "name")
     if employee_name:
         employee = frappe.get_doc("Employee", employee_name)
         return {"doctype": "Employee", "name": employee.name, "user_id": employee.user_id, "created": False}
@@ -52,6 +52,9 @@ def upsert_cashier(idempotency_key=None, cashier=None):
     employee = frappe.get_doc({
         "doctype": "Employee", "first_name": data.get("name") or data["employee_code"], "company": company,
         "user_id": user, "status": "Active" if data.get("active", True) else "Inactive",
+        "gender": data.get("gender") or "Prefer not to say",
+        "date_of_birth": getdate(data.get("date_of_birth") or "1970-01-01"),
+        "date_of_joining": getdate(data.get("date_of_joining") or nowdate()),
         "custom_babyhouse_cashier_uuid": data["uuid"], "custom_babyhouse_employee_code": data["employee_code"],
     }).insert(ignore_permissions=True)
     return {"doctype": "Employee", "name": employee.name, "user_id": user, "created": True}
@@ -154,7 +157,7 @@ def upsert_pos_session(idempotency_key=None, session=None):
         doc.submit()
         return _result(doc, True)
 
-    opening_name = frappe.db.get_value("POS Opening Entry", "custom_babyhouse_session_uuid", data.get("uuid"), "name")
+    opening_name = frappe.db.get_value("POS Opening Entry", {"custom_babyhouse_session_uuid": data.get("uuid")}, "name")
     if not opening_name:
         frappe.throw(_("The HoloERP POS Opening Entry must be synchronized first"))
     opened, closed = get_datetime(data.get("opened_at")), get_datetime(data.get("closed_at"))
@@ -316,7 +319,7 @@ def _get_or_create_ecommerce_customer(data):
     customer_name = customer_data.get("name") or customer_data.get("phone") or configured
 
     if customer_data.get("phone"):
-        existing = frappe.db.get_value("Customer", "mobile_no", customer_data.get("phone"), "name")
+        existing = frappe.db.get_value("Customer", {"mobile_no": customer_data.get("phone")}, "name")
         if existing:
             return existing
 
@@ -366,7 +369,7 @@ def pos_sync_audit(idempotency_keys=None, limit=500):
 def _find_by_idempotency_key(key):
     if key.startswith("pos-cashier:"):
         cashier_uuid = key.split(":", 1)[1]
-        employee_name = frappe.db.get_value("Employee", "custom_babyhouse_cashier_uuid", cashier_uuid, "name")
+        employee_name = frappe.db.get_value("Employee", {"custom_babyhouse_cashier_uuid": cashier_uuid}, "name")
         return frappe.get_doc("Employee", employee_name) if employee_name else None
 
     for doctype in ["Sales Invoice", "Payment Entry", "POS Opening Entry", "POS Closing Entry", "Journal Entry"]:
