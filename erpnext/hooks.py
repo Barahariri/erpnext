@@ -1,5 +1,5 @@
 app_name = "erpnext"
-app_title = "HoloERP"
+app_title = "Holo ERP"
 app_publisher = "Frappe Technologies Pvt. Ltd."
 app_description = """ERP made simple"""
 app_icon = "fa fa-th"
@@ -23,8 +23,8 @@ add_to_apps_screen = [
 develop_version = "17.x.x-develop"
 
 app_include_js = "erpnext.bundle.js"
-app_include_css = "erpnext.bundle.css"
-web_include_css = "erpnext-web.bundle.css"
+app_include_css = ["erpnext.bundle.css", "/assets/erpnext/css/holoerp_brand.css"]
+web_include_css = ["erpnext-web.bundle.css", "/assets/erpnext/css/holoerp_brand.css"]
 email_css = "email_erpnext.bundle.css"
 
 app_include_icons = [
@@ -520,7 +520,7 @@ email_brand_image = "assets/erpnext/images/holoerp-logo.png"
 default_mail_footer = """
 	<span>
 		Sent via
-		<span class="text-muted">HoloERP</span>
+		<span class="text-muted">Holo ERP</span>
 	</span>
 """
 
