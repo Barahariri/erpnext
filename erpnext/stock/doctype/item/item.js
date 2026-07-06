@@ -475,7 +475,7 @@ function render_serial_batch_banner(wrapper) {
 	let banner_html = `
 		<div class="custom-serial-batch-banner ${hiddenClass}">
 			<div class="banner-content">
-				<span class="banner-icon">${frappe.utils.icon("solid-warning", "lg", "", "padding-bottom:2px")}</span>
+				<span class="banner-icon">${frappe.utils.icon("triangle-alert", "lg", "", "padding-bottom:2px")}</span>
 				<span class="banner-text">
 					${__("To use Serial / Batch feature, enable {0} in {1}.", [
 						`<b>${__("Activate Serial / Batch No for Item")}</b>`,
@@ -828,6 +828,13 @@ $.extend(erpnext.item, {
 
 	render_item_prices: function (frm) {
 		if (frm.doc.__islocal) return;
+
+		if (!frappe.model.can_read("Item Price")) {
+			frm.toggle_display("prices_html", false);
+			return;
+		}
+		frm.toggle_display("prices_html", true);
+
 		const requested_item = frm.doc.name;
 		const container = frm.fields_dict["prices_html"].$wrapper;
 
