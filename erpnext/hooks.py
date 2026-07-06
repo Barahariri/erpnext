@@ -8,7 +8,7 @@ app_email = "hello@frappe.io"
 app_license = "GNU General Public License (v3)"
 source_link = "https://dashboard.babyhousekw.com"
 app_logo_url = "/assets/erpnext/images/holoerp-logo.png"
-app_home = "/desk"
+app_home = "/desk/desktop"
 
 add_to_apps_screen = [
 	{
@@ -22,7 +22,7 @@ add_to_apps_screen = [
 
 develop_version = "17.x.x-develop"
 
-app_include_js = "erpnext.bundle.js"
+app_include_js = ["erpnext.bundle.js", "/assets/erpnext/js/holoerp_desktop.js"]
 app_include_css = ["erpnext.bundle.css", "/assets/erpnext/css/holoerp_brand.css"]
 web_include_css = ["erpnext-web.bundle.css", "/assets/erpnext/css/holoerp_brand.css"]
 email_css = "email_erpnext.bundle.css"
