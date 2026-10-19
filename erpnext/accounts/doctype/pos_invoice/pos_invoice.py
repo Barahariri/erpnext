@@ -291,6 +291,61 @@ class POSInvoice(SalesInvoice):
 
 		self.delink_serial_and_batch_bundle()
 
+<<<<<<< HEAD
+=======
+	def update_status_of_return_against(self):
+		if self.is_return and self.return_against:
+			frappe.get_doc("POS Invoice", self.return_against).set_status(update=True)
+
+	def clear_unallocated_mode_of_payments(self):
+		self.set("payments", self.get("payments", {"amount": ["not in", [0, None, ""]]}))
+
+		sip = frappe.qb.DocType("Sales Invoice Payment")
+		frappe.qb.from_(sip).delete().where(sip.parent == self.name).where(sip.amount == 0).run()
+
+	def create_and_add_consolidated_sales_invoice(self):
+		sales_inv = self.create_return_sales_invoice()
+		self.db_set("consolidated_invoice", sales_inv.name)
+		self.set_status(update=True)
+
+	def create_return_sales_invoice(self):
+		return_sales_invoice = frappe.new_doc("Sales Invoice")
+		return_sales_invoice.is_pos = 1
+		return_sales_invoice.is_return = 1
+		map_doc(self, return_sales_invoice, table_map={"doctype": return_sales_invoice.doctype})
+		return_sales_invoice.is_created_using_pos = 1
+		return_sales_invoice.is_consolidated = 1
+		return_sales_invoice.flags.is_consolidated = True
+		return_sales_invoice.return_against = frappe.db.get_value(
+			"POS Invoice", self.return_against, "consolidated_invoice"
+		)
+		items, taxes, payments = [], [], []
+		for d in self.items:
+			si_item = map_child_doc(d, return_sales_invoice, {"doctype": "Sales Invoice Item"})
+			si_item.pos_invoice = self.name
+			si_item.pos_invoice_item = d.name
+			si_item.sales_invoice_item = get_sales_invoice_item_from_consolidated_invoice(
+				self.return_against, d.pos_invoice_item
+			)
+			items.append(si_item)
+
+		for d in self.get("taxes"):
+			tax = map_child_doc(d, return_sales_invoice, {"doctype": "Sales Taxes and Charges"})
+			taxes.append(tax)
+
+		for d in self.get("payments"):
+			payment = map_child_doc(d, return_sales_invoice, {"doctype": "Sales Invoice Payment"})
+			payments.append(payment)
+
+		return_sales_invoice.set("items", items)
+		return_sales_invoice.set("taxes", taxes)
+		return_sales_invoice.set("payments", payments)
+		return_sales_invoice.save()
+		return_sales_invoice.submit()
+
+		return return_sales_invoice
+
+>>>>>>> 93242cd (fix(accounts): enforce POS settings permissions and validation)
 	def delink_serial_and_batch_bundle(self):
 		for row in self.items:
 			if row.serial_and_batch_bundle:
