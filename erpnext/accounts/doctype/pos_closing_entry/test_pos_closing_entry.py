@@ -14,6 +14,7 @@ from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import (
 )
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_sales_return
 from erpnext.accounts.doctype.pos_invoice.test_pos_invoice import create_pos_invoice
+from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import consolidate_pos_invoices
 from erpnext.accounts.doctype.pos_opening_entry.test_pos_opening_entry import create_opening_entry
 from erpnext.accounts.doctype.pos_profile.test_pos_profile import make_pos_profile
 from erpnext.selling.page.point_of_sale.point_of_sale import get_items
@@ -313,10 +314,244 @@ class TestPOSClosingEntry(unittest.TestCase):
 		pos_invoice.append(
 			"payments", {"mode_of_payment": self.card_mode, "account": "Cash - _TC", "amount": 0}
 		)
+<<<<<<< HEAD
 		pos_invoice.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
 		pos_invoice.insert()
 		pos_invoice.submit()
 		self.assertEqual([row.mode_of_payment for row in pos_invoice.payments], [self.card_mode, "Cash"])
+=======
+		pos_si.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 1000})
+		pos_si.save()
+		pos_si.submit()
+
+		pos_si2 = create_sales_invoice(
+			qty=5, is_created_using_pos=1, pos_profile=self.pos_profile.name, do_not_save=11
+		)
+		pos_si2.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 1000})
+		pos_si2.save()
+		pos_si2.submit()
+
+		pcv_doc = make_closing_entry_from_opening(opening_entry)
+		payment = pcv_doc.payment_reconciliation[0]
+
+		self.assertEqual(payment.mode_of_payment, "Cash")
+
+		for d in pcv_doc.payment_reconciliation:
+			if d.mode_of_payment == "Cash":
+				d.closing_amount = 1500
+
+		pcv_doc.flags.in_test = True
+		pcv_doc.submit()
+
+		self.assertEqual(pcv_doc.total_quantity, 15)
+		self.assertEqual(pcv_doc.net_total, 1500)
+
+		pos_si2.reload()
+		self.assertEqual(pos_si2.pos_closing_entry, pcv_doc.name)
+
+	def test_sales_invoice_in_pos_invoice_mode(self):
+		"""
+		Test Sales Invoice and Return Sales Invoice creation during POS Invoice mode.
+		"""
+		from erpnext.accounts.doctype.sales_invoice.mapper import make_sales_return
+
+		with self.change_settings("POS Settings", {"invoice_type": "Sales Invoice"}):
+			opening_entry1 = create_opening_entry(self.pos_profile, self.test_user.name)
+
+			pos_si1, pos_si2 = create_multiple_sales_invoices(self.pos_profile)
+
+			pos_inv = create_pos_invoice(rate=100, do_not_save=1)
+			pos_inv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+			self.assertRaises(frappe.ValidationError, pos_inv.save)
+
+			pcv_doc1 = make_closing_entry_from_opening(opening_entry1)
+			for d in pcv_doc1.payment_reconciliation:
+				if d.mode_of_payment == "Cash":
+					d.closing_amount = 300
+
+			pcv_doc1.submit()
+			self.assertTrue(pcv_doc1.name)
+
+			pos_si1.reload()
+			pos_si2.reload()
+			self.assertEqual(pos_si1.pos_closing_entry, pcv_doc1.name)
+			self.assertEqual(pos_si2.pos_closing_entry, pcv_doc1.name)
+
+		with self.change_settings("POS Settings", {"invoice_type": "POS Invoice"}):
+			opening_entry2 = create_opening_entry(self.pos_profile, self.test_user.name)
+
+			pos_inv1, pos_inv2 = create_multiple_pos_invoices(self.pos_profile)
+
+			# Trying to create Sales Invoice when invoice_type is set to POS Invoice.
+			pos_si3 = create_sales_invoice(
+				qty=1, is_created_using_pos=1, pos_profile=self.pos_profile.name, do_not_save=1
+			)
+			pos_si3.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+			self.assertRaises(frappe.ValidationError, pos_si3.save)
+
+			# Trying to create Return Sales Invoice.
+			pos_rsi1 = make_sales_return(pos_si1.name)
+			pos_rsi1.save()
+			pos_rsi1.submit()
+
+			self.assertEqual(pos_rsi1.paid_amount, -100)
+
+			pcv_doc2 = make_closing_entry_from_opening(opening_entry2)
+			pcv_doc2.submit()
+
+			self.assertTrue(pcv_doc2.name)
+
+			pos_rsi1.reload()
+			self.assertEqual(pos_rsi1.pos_closing_entry, pcv_doc2.name)
+
+			self.assertIn(pos_inv1.name, [d.pos_invoice for d in pcv_doc2.pos_invoices])
+			self.assertNotIn(pos_inv2.name, [d.sales_invoice for d in pcv_doc2.sales_invoices])
+			self.assertIn(pos_rsi1.name, [d.sales_invoice for d in pcv_doc2.sales_invoices])
+			self.assertEqual(pcv_doc2.grand_total, 200)
+
+	def test_invoice_type_switch_requires_all_pos_invoices_to_be_consolidated(self):
+		opening_entry = create_opening_entry(self.pos_profile, self.test_user.name)
+		pos_inv1, pos_inv2 = create_multiple_pos_invoices(self.pos_profile)
+		closing_entry = make_closing_entry_from_opening(opening_entry)
+		closing_entry.flags.in_test = True
+		closing_entry.submit()
+
+		self.assertEqual(frappe.db.get_value("POS Opening Entry", opening_entry.name, "status"), "Closed")
+		merge_log = frappe.get_doc("POS Invoice Merge Log", {"pos_closing_entry": closing_entry.name})
+		merge_log.cancel()
+		self.assertFalse(pos_inv1.reload().consolidated_invoice)
+		self.assertFalse(pos_inv2.reload().consolidated_invoice)
+
+		settings = frappe.get_doc("POS Settings")
+		settings.invoice_type = "Sales Invoice"
+		with self.assertRaisesRegex(frappe.ValidationError, "are not consolidated"):
+			settings.save()
+
+		consolidate_pos_invoices(closing_entry=closing_entry)
+		self.assertTrue(pos_inv1.reload().consolidated_invoice)
+		self.assertTrue(pos_inv2.reload().consolidated_invoice)
+		settings.reload()
+		settings.invoice_type = "Sales Invoice"
+		settings.save()
+
+	def test_pos_invoice_in_sales_invoice_mode(self):
+		"""
+		Test POS Invoice and Return POS Invoice creation during Sales Invoice mode.
+		"""
+		from erpnext.accounts.doctype.pos_invoice.pos_invoice import make_sales_return
+
+		with self.change_settings("POS Settings", {"invoice_type": "POS Invoice"}):
+			opening_entry1 = create_opening_entry(self.pos_profile, self.test_user.name)
+
+			pos_inv1, pos_inv2 = create_multiple_pos_invoices(self.pos_profile)
+
+			# Trying to create Sales Invoice when invoice_type is set to POS Invoice.
+			pos_sinv = create_sales_invoice(
+				qty=1, is_created_using_pos=1, pos_profile=self.pos_profile.name, do_not_save=1
+			)
+			pos_sinv.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+			self.assertRaises(frappe.ValidationError, pos_sinv.save)
+
+			pcv_doc1 = make_closing_entry_from_opening(opening_entry1)
+			for d in pcv_doc1.payment_reconciliation:
+				if d.mode_of_payment == "Cash":
+					d.closing_amount = 300
+
+			pcv_doc1.submit()
+
+			self.assertTrue(pcv_doc1.name)
+
+			self.assertIn(pos_inv1.name, [d.pos_invoice for d in pcv_doc1.pos_invoices])
+			self.assertEqual(pcv_doc1.grand_total, 300)
+
+		with self.change_settings("POS Settings", {"invoice_type": "Sales Invoice"}):
+			opening_entry2 = create_opening_entry(self.pos_profile, self.test_user.name)
+
+			pos_si1, pos_si2 = create_multiple_sales_invoices(self.pos_profile)
+
+			pos_inv3 = create_pos_invoice(rate=100, do_not_save=1)
+			pos_inv3.append("payments", {"mode_of_payment": "Cash", "account": "Cash - _TC", "amount": 100})
+			self.assertRaises(frappe.ValidationError, pos_inv3.save)
+
+			# Creating Return POS Invoice
+			with self.change_settings("POS Settings", {"invoice_fields": []}):
+				settings = frappe.get_doc("POS Settings")
+				settings.append("invoice_fields", {"fieldname": "named_place", "reqd": 1})
+				settings.save()
+				pos_rinv2 = make_sales_return(pos_inv2.name)
+				pos_rinv2.save()
+				pos_rinv2.submit()
+
+			pos_rinv2.reload()
+			self.assertIsNotNone(pos_rinv2.consolidated_invoice)
+
+			# Getting Sales Invoice created during POS Invoice submission.
+			pos_rinv2_si = frappe.get_doc("Sales Invoice", pos_rinv2.consolidated_invoice)
+			self.assertEqual(pos_rinv2_si.is_return, 1)
+			self.assertEqual(pos_rinv2_si.paid_amount, -200)
+
+			pcv_doc2 = make_closing_entry_from_opening(opening_entry2)
+			for d in pcv_doc1.payment_reconciliation:
+				if d.mode_of_payment == "Cash":
+					d.closing_amount = 100
+
+			pcv_doc2.submit()
+			self.assertTrue(pcv_doc2.name)
+
+			pos_si1.reload()
+			pos_si2.reload()
+			pos_rinv2_si.reload()
+			self.assertEqual(pos_si2.pos_closing_entry, pcv_doc2.name)
+			self.assertEqual(pos_rinv2_si.pos_closing_entry, pcv_doc2.name)
+
+	def test_change_is_taken_once_from_modes_sharing_an_account(self):
+		with self.set_user("Administrator"):
+			add_wallet_mode_of_payment(self.pos_profile, "Cash - _TC")
+
+		opening_entry = create_opening_entry(self.pos_profile, self.test_user.name)
+		make_paid_pos_invoice([("Cash", 50), ("_Test Wallet", 50)])
+
+		self.assertEqual(get_expected_amounts(opening_entry), {"Cash": 40, "_Test Wallet": 50})
+
+	def test_change_is_taken_from_the_mode_on_the_change_account(self):
+		with self.set_user("Administrator"):
+			wallet_account = make_cash_account("_Test Wallet Cash")
+			add_wallet_mode_of_payment(self.pos_profile, wallet_account)
+
+		opening_entry = create_opening_entry(self.pos_profile, self.test_user.name)
+		make_paid_pos_invoice([("Cash", 40), ("_Test Wallet", 60)], account_for_change_amount=wallet_account)
+
+		self.assertEqual(get_expected_amounts(opening_entry), {"Cash": 40, "_Test Wallet": 50})
+
+	def test_change_is_taken_after_the_cash_account_changes(self):
+		with self.set_user("Administrator"):
+			new_cash_account = make_cash_account("Zz Test Cash")
+
+		opening_entry = create_opening_entry(self.pos_profile, self.test_user.name)
+		make_paid_pos_invoice([("Cash", 100)])
+		frappe.db.set_value(
+			"Mode of Payment Account",
+			{"parent": "Cash", "company": "_Test Company"},
+			"default_account",
+			new_cash_account,
+		)
+		make_paid_pos_invoice([("Cash", 90)])
+
+		self.assertEqual(get_expected_amounts(opening_entry), {"Cash": 180})
+
+	def test_change_is_taken_when_the_change_account_differs(self):
+		with self.set_user("Administrator"):
+			change_account = make_cash_account("_Test Change Cash")
+
+		opening_entry = create_opening_entry(self.pos_profile, self.test_user.name)
+		make_paid_pos_invoice([("Cash", 100)], account_for_change_amount=change_account)
+
+		self.assertEqual(get_expected_amounts(opening_entry), {"Cash": 90})
+
+	def test_closing_refuses_session_invoices_left_out(self):
+		opening_entry = create_opening_entry(self.pos_profile, self.test_user.name)
+		make_paid_pos_invoice([("Cash", 90)])
+>>>>>>> bf18aca (test(accounts): cover POS settings validation)
 
 		closing_entry = make_closing_entry_from_opening(opening_entry)
 		expected = {row.mode_of_payment: row.expected_amount for row in closing_entry.payment_reconciliation}
