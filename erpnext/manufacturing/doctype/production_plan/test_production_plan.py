@@ -4538,6 +4538,30 @@ class TestProductionPlan(ERPNextTestSuite):
 		reserved_entries = StockReservation(work_order).get_reserved_entries("Work Order", work_order.name)
 		self.assertEqual(sum({row.name: row.reserved_qty for row in reserved_entries}.values()), 10)
 
+	@ERPNextTestSuite.change_settings("Stock Settings", {"enable_stock_reservation": 1})
+	def test_hand_off_releases_the_plan_row(self):
+		plan = self.make_plan_short_of_stock("RM For SR Hand Off Release")
+		self.receive_for_plan(plan, 6)
+		plan.make_work_order()
+		work_order = frappe.get_doc("Work Order", {"production_plan": plan.name})
+		work_order.source_warehouse = work_order.wip_warehouse = "_Test Warehouse - _TC"
+		work_order.fg_warehouse = "_Test Warehouse - _TC"
+		work_order.submit()
+
+		self.assertEqual(
+			frappe.db.get_value("Material Request Plan Item", plan.mr_items[0].name, "stock_reserved_qty"), 0
+		)
+		self.assertEqual(
+			set(
+				frappe.get_all(
+					"Stock Reservation Entry",
+					filters={"voucher_type": "Production Plan", "voucher_no": plan.name, "docstatus": 1},
+					pluck="status",
+				)
+			),
+			{"Closed"},
+		)
+
 	def make_plan_short_of_stock(self, rm_item):
 		from erpnext.manufacturing.doctype.bom.test_bom import create_nested_bom
 
