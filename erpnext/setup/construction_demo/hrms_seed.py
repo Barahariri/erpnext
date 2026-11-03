@@ -238,8 +238,10 @@ def _journal(seed, plan, period, rows_total):
     payable = _payable(seed, plan)
     cash = _account(plan.name, "default_cash_account")
     center = seed.default_cost_center(plan.name)
-    # Accrue full payroll; pay 93%, leave 7% outstanding at period end.
+    # Pay 93% immediately; the remaining 7% becomes payroll payable.
+    # This is one balanced 3-line JE, avoiding duplicate dr/cr to payable.
     paid = round(rows_total * 0.93, 2)
+    outstanding = round(rows_total - paid, 2)
     doc = frappe.get_doc({
         "doctype": "Journal Entry",
         "voucher_type": "Journal Entry",
@@ -253,13 +255,10 @@ def _journal(seed, plan, period, rows_total):
                 "cost_center": center,
             },
             {
-                "account": payable, "credit_in_account_currency": rows_total,
-            },
-            {
-                "account": payable, "debit_in_account_currency": paid,
-            },
-            {
                 "account": cash, "credit_in_account_currency": paid,
+            },
+            {
+                "account": payable, "credit_in_account_currency": outstanding,
             },
         ],
     })
