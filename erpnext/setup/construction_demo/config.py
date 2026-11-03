@@ -184,6 +184,12 @@ ORG_NAMES = (
 )
 
 
+def billing_cycles(plan: CompanyPlan, index: int) -> int:
+    """Number of realistic two-month certification cycles within project duration."""
+    specification = PROJECT_CATALOG[plan.abbr][index - 1]
+    return min(8, max(3, (specification.duration_months + 1) // 2))
+
+
 def scaled(total: int, scale: str) -> int:
     if scale == "full":
         return total
