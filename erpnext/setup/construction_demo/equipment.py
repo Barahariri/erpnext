@@ -15,7 +15,7 @@ from frappe.utils import add_months, get_last_day, getdate
 import frappe
 
 from erpnext.setup.construction_demo.config import (
-    COMPANIES, END_DATE, EQUIPMENT_TYPES, scaled
+    COMPANIES, END_DATE, EQUIPMENT_CATALOG, PROJECT_CATALOG, scaled
 )
 
 
@@ -127,7 +127,38 @@ def _repair(seed, plan, asset, index):
     seed.created["Asset Repair"] += 1
 
 
+def _assigned_project(seed, plan, model, index):
+    active = scaled(plan.projects, seed.scale)
+    options = list(enumerate(PROJECT_CATALOG[plan.abbr][:active], start=1))
+    sectors = {
+        "Excavator": ("Infrastructure", "Industrial", "Buildings"),
+        "Backhoe": ("Infrastructure", "Industrial", "Buildings"),
+        "Wheel Loader": ("Infrastructure", "Industrial", "Roads"),
+        "Bulldozer": ("Infrastructure", "Roads", "Industrial"),
+        "Road Roller": ("Roads", "Infrastructure"),
+        "Dump Truck": ("Roads", "Infrastructure", "Industrial"),
+        "Concrete Pump": ("Buildings", "Industrial"),
+        "Mobile Crane": ("Buildings", "Industrial"),
+        "Rough Terrain Crane": ("Buildings", "Industrial"),
+        "Telehandler": ("Buildings", "Industrial"),
+        "Forklift": ("Industrial", "Buildings"),
+        "Generator": ("Buildings", "MEP", "Industrial"),
+        "Air Compressor": ("Infrastructure", "Industrial", "Renovation"),
+    }
+    acceptable = [entry for entry in options if entry[1].sector in sectors.get(model.kind, ())]
+    candidates = acceptable or options
+    selected_index, specification = candidates[(index * 7) % len(candidates)]
+    project_name = seed.project_label(plan, selected_index)
+    project = frappe.db.get_value(
+        "Project", {"project_name": project_name, "company": plan.name}, "name"
+    )
+    if not project:
+        frappe.throw("Missing project for equipment: " + project_name)
+    return project, specification
+
+
 def seed_equipment(seed):
+    """Assign machines with actual model descriptions and synthetic identities."""
     account_data = {p.abbr: _accounts(seed, p) for p in COMPANIES}
     category = seed.ensure(
         "Asset Category",
@@ -136,25 +167,24 @@ def seed_equipment(seed):
             "asset_category_name": "DEMO Construction Machinery",
             "non_depreciable_category": 0,
             "accounts": [
-                {"company_name": plan.name, **{
-                    name: accounts[name] for name in (
-                        "fixed_asset_account",
-                        "accumulated_depreciation_account",
-                        "depreciation_expense_account",
-                    )
-                }}
+                {
+                    "company_name": plan.name,
+                    "fixed_asset_account": account_data[plan.abbr]["fixed_asset_account"],
+                    "accumulated_depreciation_account": account_data[plan.abbr]["accumulated_depreciation_account"],
+                    "depreciation_expense_account": account_data[plan.abbr]["depreciation_expense_account"],
+                }
                 for plan in COMPANIES
-                for accounts in [account_data[plan.abbr]]
             ],
         },
     )
-    for i, equipment in enumerate(EQUIPMENT_TYPES, start=1):
-        code = f"DEMO-EQUIPMENT-TYPE-{i:02d}"
+    for j, model in enumerate(EQUIPMENT_CATALOG, start=1):
+        code = f"DEMO-EQUIPMENT-MODEL-{j:02d}"
         seed.ensure(
-            "Item", {"item_code": code},
+            "Item",
+            {"item_code": code},
             {
                 "item_code": code,
-                "item_name": f"DEMO {equipment}",
+                "item_name": f"{model.kind_ar} | {model.manufacturer} {model.model}",
                 "item_group": "DEMO Construction Materials",
                 "stock_uom": "Nos",
                 "is_stock_item": 0,
@@ -162,24 +192,44 @@ def seed_equipment(seed):
                 "is_sales_item": 0,
                 "is_purchase_item": 1,
                 "asset_category": category,
+                "description": (
+                    f"Synthetic equipment model item | {model.kind_ar} | "
+                    f"{model.manufacturer} {model.model}; "
+                    "technical details refer to manufacturer catalogues."
+                ),
             },
         )
     frappe.db.commit()
 
     for plan in COMPANIES:
         accounts = account_data[plan.abbr]
-        location = seed.ensure(
+        yard = seed.ensure(
             "Location",
             {"location_name": f"DEMO-{plan.abbr}-EQUIPMENT-YARD"},
             {"location_name": f"DEMO-{plan.abbr}-EQUIPMENT-YARD"},
         )
-        for i in range(1, scaled(plan.equipment, seed.scale) + 1):
-            name = f"DEMO-{plan.abbr}-ASSET-{i:04d}"
-            item_code = f"DEMO-EQUIPMENT-TYPE-{((i - 1) % len(EQUIPMENT_TYPES)) + 1:02d}"
+        count = scaled(plan.equipment, seed.scale)
+        for i in range(1, count + 1):
+            model_index = (i - 1) % len(EQUIPMENT_CATALOG)
+            model = EQUIPMENT_CATALOG[model_index]
+            identifier = f"DEMO-{plan.abbr}-ASSET-{i:04d}"
+            year = 2018 + (i * 3 + model_index) % 6
+            synthetic_serial = f"SIM-{plan.abbr}-{model_index + 1:02d}-{i:06d}"
+            hours = 650 + (i * 307) % 8500
+            assigned_project, spec = _assigned_project(seed, plan, model, i)
+            name = (
+                f"{identifier} | {model.kind_ar} "
+                f"{model.manufacturer} {model.model} | {year}"
+            )
+            item_code = f"DEMO-EQUIPMENT-MODEL-{model_index + 1:02d}"
             purchased = add_months(getdate("2023-11-01"), (i * 3) % 35)
             multiplier = {"KRC": 1, "RDC": 10, "MSE": 100000}[plan.abbr]
-            price = (2000 + i % 37 * 950) * multiplier
-
+            price = (model.estimated_kwd + (i % 5) * 1100) * multiplier
+            operating_state = (
+                "Under Maintenance" if i % 13 == 0
+                else "Idle" if i % 9 == 0
+                else "Assigned"
+            )
             found = frappe.db.get_value(
                 "Asset", {"asset_name": name, "company": plan.name}, "name"
             )
@@ -197,13 +247,24 @@ def seed_equipment(seed):
                     "asset_owner": "Company",
                     "asset_owner_company": plan.name,
                     "company": plan.name,
-                    "location": location,
+                    "location": yard,
                     "cost_center": seed.default_cost_center(plan.name),
                     "purchase_date": purchased,
                     "available_for_use_date": purchased,
                     "purchase_amount": price,
                     "net_purchase_amount": price,
                     "calculate_depreciation": 1,
+                    "custom_demo_asset_code": identifier,
+                    "custom_demo_manufacturer": model.manufacturer,
+                    "custom_demo_model": model.model,
+                    "custom_demo_machine_type": model.kind_ar,
+                    "custom_demo_serial": synthetic_serial,
+                    "custom_demo_manufacture_year": year,
+                    "custom_demo_hour_meter": hours,
+                    "custom_demo_fuel_lph": model.fuel_lph,
+                    "custom_demo_assigned_project": assigned_project,
+                    "custom_demo_operating_site": spec.district,
+                    "custom_demo_operating_state": operating_state,
                     "finance_books": [{
                         "depreciation_method": "Straight Line",
                         "frequency_of_depreciation": 1,
@@ -214,22 +275,18 @@ def seed_equipment(seed):
                 })
                 asset.insert(ignore_permissions=True)
                 seed.created["Asset"] += 1
-
             if asset.docstatus == 0:
                 asset.submit()
             _fund_asset(seed, plan, name, asset, price, purchased, accounts, i)
             _repair(seed, plan, asset, i)
-            if i % 30 == 0:
+            if i % 20 == 0:
                 frappe.db.commit()
         frappe.db.commit()
 
-    # Use ERPNext's genuine depreciation scheduler; it writes validated
-    # depreciation JEs and updates Asset / Asset Depreciation Schedule values.
-    # It is expensive on 470 assets and must be load-tested on the pilot site.
     from erpnext.assets.doctype.asset.depreciation import book_depreciation_entries
     book_depreciation_entries(getdate(END_DATE))
     seed.warnings.append(
-        "Existing Assets are contributed/financed synthetically, not linked to "
-        "vendor equipment Purchase Invoices. Depreciation backfill should be "
-        "verified in Asset Depreciation Schedule and GL audit."
+        "Machine models are authentic product family names; each specific asset, "
+        "manufacture year, serial, site, fuel estimate and hours are DEMO fiction. "
+        "Verify depreciation and GL before using financial demo reports."
     )
