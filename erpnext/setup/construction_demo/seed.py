@@ -472,6 +472,18 @@ class ConstructionDemo:
             )
 
     def _employees(self, plan):
+        # HRMS can be installed without the Desk Setup Wizard, leaving
+        # Frappe's Gender master entirely empty on a fresh bench reinstall.
+        # Employee.gender is a Link and its options must pre-exist.
+        # Both values are idempotent and are needed before first Employee.
+        for gender in ("Male", "Female"):
+            self.ensure(
+                "Gender",
+                {"gender": gender},
+                {"gender": gender},
+            )
+        frappe.db.commit()
+
         for i in range(1, scaled(plan.employees, self.scale) + 1):
             number = f"DEMO-{plan.abbr}-EMP-{i:04d}"
             if frappe.db.exists("Employee", {"employee_number": number}):
