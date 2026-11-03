@@ -70,6 +70,60 @@ def _component(seed, plan, title, abbr, formula):
     )
 
 
+def _holiday_calendar(seed, plan):
+    """Prepare a synthetic Friday weekly-rest calendar and company HLA.
+
+    HRMS v16 resolves submitted Holiday List Assignment rows by employee
+    first, company second. A Company.default_holiday_list alone does not
+    satisfy Salary Slip validation after a fresh site reinstall.
+    """
+    title = f"DEMO {plan.abbr} Weekly Rest 2023-2026"
+    if not frappe.db.exists("Holiday List", title):
+        doc = frappe.get_doc({
+            "doctype": "Holiday List",
+            "holiday_list_name": title,
+            "from_date": "2023-11-01",
+            "to_date": "2026-12-31",
+            "weekly_off": "Friday",
+        })
+        doc.get_weekly_off_dates()
+        doc.insert(ignore_permissions=True)
+        seed.created["Holiday List"] += 1
+    else:
+        seed.existing["Holiday List"] += 1
+
+    assignment = frappe.db.exists(
+        "Holiday List Assignment",
+        {
+            "applicable_for": "Company",
+            "assigned_to": plan.name,
+            "from_date": "2023-11-01",
+            "docstatus": 1,
+        },
+    )
+    if assignment:
+        prior = frappe.db.get_value("Holiday List Assignment", assignment, "holiday_list")
+        if prior != title:
+            frappe.throw(
+                f"Existing Holiday List Assignment on 2023-11-01 for "
+                f"{plan.name} points to {prior}, not {title}"
+            )
+        seed.existing["Holiday List Assignment"] += 1
+    else:
+        doc = frappe.get_doc({
+            "doctype": "Holiday List Assignment",
+            "naming_series": "HR-HLA-.YYYY.-",
+            "applicable_for": "Company",
+            "assigned_to": plan.name,
+            "holiday_list": title,
+            "from_date": "2023-11-01",
+        })
+        doc.insert(ignore_permissions=True)
+        doc.submit()
+        seed.created["Holiday List Assignment"] += 1
+    frappe.db.commit()
+
+
 def _setup_payroll(seed, plan):
     payable = _payable(seed, plan)
     basic = _component(seed, plan, "Basic Pay", "BAS", "base")
@@ -337,6 +391,7 @@ def seed_hrms(seed):
     for plan in COMPANIES:
         if not frappe.db.exists("Company", plan.name):
             frappe.throw("Setup must run before HRMS")
+        _holiday_calendar(seed, plan)
         structures, payable = _setup_payroll(seed, plan)
         rows = _employee_rows(plan)
         if not rows:
