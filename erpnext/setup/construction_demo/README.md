@@ -27,7 +27,7 @@ Period: 2023-11-01 to 2026-10-31. Sample stock materials: 240. Each project has 
 - Purchase Order -> Receipt -> Purchase Invoice -> Stock Entry (issue to project) -> supplier Payment Entry.
 - Synthetic balanced capital opening Journal Entries and customer receipts with paid/part-paid/unpaid states.
 - Optional Frappe HRMS salary structure, assignment, salary slips, two attendance days/month, leave allocations and aggregate payroll journals.
-- 74 submitted Existing Assets, funded by DEMO in-kind equity or equipment-financing liability Journal Entries, and 60-month depreciation schedules posted to the end of the simulation. Some pending repair records.
+- 74 submitted Existing Assets with manufacturer and model identity, synthetic serial, manufacture year, hour-meter, running state, project/site assignment, funded by artificial equity or finance Journal Entries; 60-month depreciation schedules, maintenance drafts and quarterly sample equipment-fuel Journal Entries.
 - Dedicated bilingual Sales Invoice print format watermarked as DEMO.
 - Read-only audit for counts, General Ledger balance and unexpected non-simulated tax rates.
 
@@ -50,6 +50,7 @@ Country tax mode (default) generates an informational 0% row, which does NOT imp
 - transactions.py — submitted progress and supplier invoices
 - procurement.py — procurement, stock movement, supplier payment
 - equipment.py — 74 named machine Asset registers, realistic manufacturer/model items, synthetic serials, hour meters, linked project, financing, depreciation and repairs
+- equipment_usage.py — projected machine fuel consumption expense Journal Entries per assigned project
 - hrms_seed.py — optional payroll and leave simulation
 - custom_fields.py — project district/scope/branch and machine manufacturer/model/serial/hour meter/status fields
 - catalog_check.py — offline validation of catalogue names, counts and scope
@@ -114,7 +115,7 @@ docker exec erpnext-backend-1 bench --site erp.yourdomain.com execute \
   --kwargs '{"dry_run":0,"scale":"full","phase":"all","tax_mode":"country","confirmation":"GENERATE_CONSTRUCTION_DEMO"}'
 ~~~
 
-If HRMS does not appear in site list-apps, installing the app into the custom image is not enough. Explicitly install it on the test site and migrate using the documented Bench procedure.
+If HRMS does not appear in site list-apps, installing the app into the custom image is not enough. Explicitly install it on the test site and migrate using Bench. **The full run now fails fast if HRMS is absent**, so the user cannot mistake a partial run for a complete simulation.
 
 ## Known integration-test limitations
 
