@@ -130,6 +130,25 @@ class ConstructionDemo:
             frappe.throw("Missing non-group Cost Center in " + company)
         return center
 
+    @staticmethod
+    def regional_site(plan, district: str) -> str:
+        """Operational region for each actual project district."""
+        if plan.abbr == "KRC":
+            return plan.sites[1] if district in ("الأحمدي", "الفحيحيل", "العقيلة") else plan.sites[0]
+        if plan.abbr == "RDC":
+            return plan.sites[1] if district in ("الريان", "أم صلال", "لوسيل") else plan.sites[0]
+        return plan.sites[1] if district in ("عدرا الصناعية", "جرمانا", "صحنايا", "قدسيا") else plan.sites[0]
+
+    def project_cost_center(self, plan, index: int) -> str:
+        spec = PROJECT_CATALOG[plan.abbr][index - 1]
+        site = self.regional_site(plan, spec.district)
+        center = frappe.db.get_value(
+            "Cost Center",
+            {"company": plan.name, "cost_center_name": f"DEMO {plan.abbr} {site}"},
+            "name",
+        )
+        return center or self.default_cost_center(plan.name)
+
     def _company(self, plan) -> None:
         if not frappe.db.exists("Currency", plan.currency):
             frappe.throw("Currency not installed: " + plan.currency)
@@ -172,7 +191,22 @@ class ConstructionDemo:
                     "enabled": 1,
                 },
             )
+        parent_center = frappe.db.get_value(
+            "Cost Center", {"company": plan.name, "is_group": 1}, "name"
+        )
+        if not parent_center:
+            frappe.throw("Missing root Cost Center for " + plan.name)
         for site in plan.sites:
+            self.ensure(
+                "Cost Center",
+                {"cost_center_name": f"DEMO {plan.abbr} {site}", "company": plan.name},
+                {
+                    "cost_center_name": f"DEMO {plan.abbr} {site}",
+                    "company": plan.name,
+                    "parent_cost_center": parent_center,
+                    "is_group": 0,
+                },
+            )
             self.ensure(
                 "Warehouse",
                 {"warehouse_name": "DEMO " + plan.abbr + " " + site, "company": plan.name},
@@ -350,6 +384,7 @@ class ConstructionDemo:
                     "date_of_joining": date(2019 + i % 5, month, day),
                     "status": "Active",
                     "relieving_date": None,
+                    "branch": "DEMO KRC Ahmadi" if plan.abbr == "KRC" and i % 3 == 0 else None,
                     "department": frappe.db.get_value(
                         "Department",
                         {"department_name": department, "company": plan.name},
@@ -402,7 +437,11 @@ class ConstructionDemo:
                     "custom_demo_district": spec.district,
                     "custom_demo_scope": spec.scope,
                     "custom_demo_sector": spec.sector,
-                    "cost_center": self.default_cost_center(plan.name),
+                    "cost_center": self.project_cost_center(plan, i),
+                    "custom_demo_branch": "DEMO KRC Ahmadi" if (
+                        plan.abbr == "KRC" and
+                        self.regional_site(plan, spec.district) == "الأحمدي"
+                    ) else None,
                 },
             )
             for j, stage in enumerate(PROJECT_STAGES, start=1):
