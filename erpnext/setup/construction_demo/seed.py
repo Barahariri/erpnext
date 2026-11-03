@@ -348,8 +348,8 @@ class ConstructionDemo:
                     "gender": "Female" if first in ("فاطمة", "سارة", "نور", "ليلى") else "Male",
                     "date_of_birth": date(year, month, day),
                     "date_of_joining": date(2019 + i % 5, month, day),
-                    "status": "Active" if i % 13 else "Left",
-                    "relieving_date": date(2026, 1, 1) if i % 13 == 0 else None,
+                    "status": "Active",
+                    "relieving_date": None,
                     "department": frappe.db.get_value(
                         "Department",
                         {"department_name": department, "company": plan.name},
