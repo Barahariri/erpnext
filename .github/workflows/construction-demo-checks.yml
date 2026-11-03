@@ -35,6 +35,8 @@ jobs:
         run: |
           pip install ruff
           ruff check --isolated --select E9,F63,F7,F82 erpnext/setup/construction_demo
+      - name: Check human-readable project and equipment catalogue
+        run: python erpnext/setup/construction_demo/catalog_check.py
       - name: Confirm required files exist
         run: |
           test -f erpnext/setup/construction_demo/config.py
