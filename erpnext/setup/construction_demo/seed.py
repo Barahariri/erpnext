@@ -1,0 +1,377 @@
+"""Opt-in, repeatable construction demo generator for ERPNext 16.
+
+Run with:
+  bench --site SITE execute erpnext.setup.construction_demo.seed.run
+  bench --site SITE execute erpnext.setup.construction_demo.seed.run --kwargs '{"dry_run":0,"scale":"pilot","phase":"masters","confirmation":"GENERATE_CONSTRUCTION_DEMO"}'
+
+Writes require construction_demo_enabled=1 in the *test site's* config.
+Do NOT enable this flag on production. This is intentionally not a patch/hook.
+"""
+from __future__ import annotations
+
+from collections import Counter
+from datetime import date, timedelta
+
+import frappe
+from frappe.utils import add_months, getdate
+
+from erpnext.setup.construction_demo.config import (
+    COMPANIES,
+    CONFIRMATION,
+    DEPARTMENTS,
+    DESIGNATIONS,
+    EQUIPMENT_TYPES,
+    FIRST_NAMES,
+    LAST_NAMES,
+    MATERIALS,
+    ORG_NAMES,
+    PROJECT_STAGES,
+    PROJECT_TYPES,
+    SEED_VERSION,
+    expected_totals,
+    scaled,
+)
+
+VALID_PHASES = ("setup", "masters", "assets", "transactions", "all")
+
+
+def run(
+    dry_run: int = 1,
+    scale: str = "pilot",
+    phase: str = "all",
+    confirmation: str | None = None,
+) -> dict:
+    """Bench entry point. Defaults to a read-only, lightweight preview."""
+    if scale not in ("pilot", "full"):
+        frappe.throw("scale must be pilot or full")
+    if phase not in VALID_PHASES:
+        frappe.throw("phase must be one of: " + ", ".join(VALID_PHASES))
+
+    result = {
+        "seed_version": SEED_VERSION,
+        "phase": phase,
+        "scale": scale,
+        "dry_run": bool(int(dry_run)),
+        "expected": expected_totals(scale),
+        "period": ["2023-11-01", "2026-10-31"],
+        "warnings": [],
+    }
+    installed = set(frappe.get_installed_apps())
+    if "hrms" not in installed:
+        result["warnings"].append("HRMS is NOT installed: payroll, attendance and leave transactions are excluded.")
+    if int(dry_run):
+        return result
+
+    if confirmation != CONFIRMATION:
+        frappe.throw("Explicit demo confirmation is required: " + CONFIRMATION)
+    if not frappe.conf.get("construction_demo_enabled"):
+        frappe.throw("Site config construction_demo_enabled=1 is required. NEVER use on production.")
+    if frappe.conf.get("developer_mode") is None:
+        result["warnings"].append("Verify that this is an isolated test site before seeding.")
+    if frappe.session.user != "Administrator":
+        frappe.throw("Run this offline via bench execute as Administrator")
+
+    seed = ConstructionDemo(scale)
+    if phase in ("setup", "all"):
+        seed.setup()
+    if phase in ("masters", "all"):
+        seed.masters()
+    if phase in ("assets", "all"):
+        seed.assets()
+    if phase in ("transactions", "all"):
+        from erpnext.setup.construction_demo.transactions import seed_transactions
+        seed_transactions(seed)
+    result["created"] = dict(seed.created)
+    result["already_exists"] = dict(seed.existing)
+    result["warnings"].extend(seed.warnings)
+    return result
+
+
+class ConstructionDemo:
+    def __init__(self, scale: str):
+        self.scale = scale
+        self.created = Counter()
+        self.existing = Counter()
+        self.warnings: list[str] = []
+
+    def ensure(self, doctype: str, filters: dict, fields: dict) -> str:
+        """Idempotent by business-key; never update an existing non-demo record."""
+        current = frappe.db.exists(doctype, filters)
+        if current:
+            self.existing[doctype] += 1
+            return current
+        doc = frappe.get_doc({"doctype": doctype, **fields})
+        doc.insert(ignore_permissions=True)
+        self.created[doctype] += 1
+        return doc.name
+
+    def company_name(self, plan) -> str:
+        return plan.name
+
+    def default_cost_center(self, company: str) -> str:
+        center = frappe.db.get_value(
+            "Cost Center", {"company": company, "is_group": 0}, "name"
+        )
+        if not center:
+            frappe.throw("Missing non-group Cost Center in " + company)
+        return center
+
+    def _company(self, plan) -> None:
+        if not frappe.db.exists("Currency", plan.currency):
+            frappe.throw("Currency not installed: " + plan.currency)
+        existing = frappe.db.exists("Company", plan.name)
+        if existing:
+            details = frappe.db.get_value(
+                "Company", existing, ["abbr", "country", "default_currency"], as_dict=True
+            )
+            if (
+                details.abbr != plan.abbr
+                or details.country != plan.country
+                or details.default_currency != plan.currency
+            ):
+                frappe.throw("Company already exists with conflicting configuration: " + plan.name)
+            self.existing["Company"] += 1
+        else:
+            self.ensure(
+                "Company",
+                {"company_name": plan.name},
+                {
+                    "company_name": plan.name,
+                    "abbr": plan.abbr,
+                    "country": plan.country,
+                    "default_currency": plan.currency,
+                    "date_of_establishment": "2018-01-01",
+                    "create_chart_of_accounts_based_on": "Standard Template",
+                    "chart_of_accounts": "Standard",
+                    "valuation_method": "FIFO",
+                },
+            )
+        for site in plan.sites:
+            self.ensure(
+                "Warehouse",
+                {"warehouse_name": "DEMO " + plan.abbr + " " + site, "company": plan.name},
+                {
+                    "warehouse_name": "DEMO " + plan.abbr + " " + site,
+                    "company": plan.name,
+                    "is_group": 0,
+                },
+            )
+        if plan.abbr == "KRC":
+            self.ensure(
+                "Branch", {"branch": "DEMO KRC Ahmadi"},
+                {"branch": "DEMO KRC Ahmadi"},
+            )
+
+    def _fiscal_years(self):
+        for year in (2023, 2024, 2025, 2026):
+            label = "DEMO-FY-" + str(year)
+            self.ensure(
+                "Fiscal Year",
+                {"year": label},
+                {
+                    "year": label,
+                    "year_start_date": date(year, 1, 1),
+                    "year_end_date": date(year, 12, 31),
+                },
+            )
+
+    def setup(self) -> None:
+        self._fiscal_years()
+        for plan in COMPANIES:
+            self._company(plan)
+            frappe.db.commit()
+
+    @staticmethod
+    def customer_label(plan, index: int) -> str:
+        org = ORG_NAMES[(index - 1) % len(ORG_NAMES)]
+        return f"DEMO {plan.abbr} {org} عميل {index:03d}"
+
+    @staticmethod
+    def supplier_label(plan, index: int) -> str:
+        org = ORG_NAMES[(index + 3) % len(ORG_NAMES)]
+        return f"DEMO {plan.abbr} {org} مورد {index:03d}"
+
+    @staticmethod
+    def project_label(plan, index: int) -> str:
+        category = PROJECT_TYPES[(index - 1) % len(PROJECT_TYPES)]
+        site = plan.sites[index % len(plan.sites)]
+        return f"DEMO-{plan.abbr}-PRJ-{index:03d} | {category} - {site}"
+
+    def _parties(self, plan):
+        for i in range(1, scaled(plan.customers, self.scale) + 1):
+            label = self.customer_label(plan, i)
+            self.ensure(
+                "Customer", {"customer_name": label},
+                {"customer_name": label, "customer_type": "Company"},
+            )
+        for i in range(1, scaled(plan.suppliers, self.scale) + 1):
+            label = self.supplier_label(plan, i)
+            self.ensure(
+                "Supplier", {"supplier_name": label},
+                {"supplier_name": label, "supplier_type": "Company"},
+            )
+
+    def _materials(self):
+        self.ensure(
+            "Item Group",
+            {"item_group_name": "DEMO Construction Materials"},
+            {
+                "item_group_name": "DEMO Construction Materials",
+                "parent_item_group": "All Item Groups",
+                "is_group": 0,
+            },
+        )
+        self.ensure(
+            "Item Group",
+            {"item_group_name": "DEMO Construction Services"},
+            {
+                "item_group_name": "DEMO Construction Services",
+                "parent_item_group": "All Item Groups",
+                "is_group": 0,
+            },
+        )
+        self.ensure(
+            "Item",
+            {"item_code": "DEMO-CONSTRUCTION-SERVICE"},
+            {
+                "item_code": "DEMO-CONSTRUCTION-SERVICE",
+                "item_name": "DEMO Work Progress Certificate Service",
+                "item_group": "DEMO Construction Services",
+                "stock_uom": "Nos",
+                "is_stock_item": 0,
+                "is_sales_item": 1,
+                "is_purchase_item": 1,
+                "description": "Synthetic construction work item for demo invoices.",
+            },
+        )
+        for i in range(1, scaled(1200, self.scale) + 1):
+            material = MATERIALS[(i - 1) % len(MATERIALS)]
+            code = f"DEMO-MAT-{i:04d}"
+            self.ensure(
+                "Item",
+                {"item_code": code},
+                {
+                    "item_code": code,
+                    "item_name": f"{material} / صنف {i:04d}",
+                    "item_group": "DEMO Construction Materials",
+                    "stock_uom": "Nos",
+                    "is_stock_item": 1,
+                    "description": f"DEMO construction material batch {i:04d}; artificial unit rates.",
+                },
+            )
+
+    def _departments(self, plan):
+        for label in DEPARTMENTS:
+            full = f"DEMO {plan.abbr} {label}"
+            self.ensure(
+                "Department",
+                {"department_name": full, "company": plan.name},
+                {"department_name": full, "company": plan.name},
+            )
+
+    def _employees(self, plan):
+        for i in range(1, scaled(plan.employees, self.scale) + 1):
+            number = f"DEMO-{plan.abbr}-EMP-{i:04d}"
+            if frappe.db.exists("Employee", {"employee_number": number}):
+                self.existing["Employee"] += 1
+                continue
+            first = FIRST_NAMES[(i * 3) % len(FIRST_NAMES)]
+            last = LAST_NAMES[(i * 7) % len(LAST_NAMES)]
+            year = 1980 + (i % 21)
+            month = 1 + (i % 12)
+            day = 1 + (i % 27)
+            department = f"DEMO {plan.abbr} {DEPARTMENTS[i % len(DEPARTMENTS)]}"
+            designation = DESIGNATIONS[i % len(DESIGNATIONS)]
+            self.ensure(
+                "Designation",
+                {"designation_name": designation},
+                {"designation_name": designation},
+            )
+            self.ensure(
+                "Employee",
+                {"employee_number": number},
+                {
+                    "employee_number": number,
+                    "first_name": first,
+                    "last_name": last,
+                    "company": plan.name,
+                    "gender": "Female" if first in ("فاطمة", "سارة", "نور", "ليلى") else "Male",
+                    "date_of_birth": date(year, month, day),
+                    "date_of_joining": date(2019 + i % 5, month, day),
+                    "status": "Active" if i % 13 else "Left",
+                    "department": frappe.db.get_value(
+                        "Department",
+                        {"department_name": department, "company": plan.name},
+                        "name",
+                    ),
+                    "designation": frappe.db.get_value(
+                        "Designation", {"designation_name": designation}, "name"
+                    ),
+                    "create_user_permission": 0,
+                    "create_user_automatically": 0,
+                },
+            )
+
+    def _projects(self, plan):
+        clients = scaled(plan.customers, self.scale)
+        for i in range(1, scaled(plan.projects, self.scale) + 1):
+            label = self.project_label(plan, i)
+            customer_name = self.customer_label(plan, 1 + ((i - 1) % clients))
+            customer = frappe.db.get_value(
+                "Customer", {"customer_name": customer_name}, "name"
+            )
+            start = add_months(getdate("2023-11-01"), (i * 7) % 28)
+            finish = add_months(start, 5 + (i % 8))
+            project = self.ensure(
+                "Project",
+                {"project_name": label, "company": plan.name},
+                {
+                    "project_name": label,
+                    "company": plan.name,
+                    "customer": customer,
+                    "expected_start_date": start,
+                    "expected_end_date": finish,
+                    "status": "Completed" if finish < getdate("2026-10-31") else "Open",
+                    "estimated_costing": (30000 + 17000 * i) * (3 if plan.abbr == "RDC" else 1),
+                    "notes": "DEMO ONLY - artificial contract and cost data.",
+                    "cost_center": self.default_cost_center(plan.name),
+                },
+            )
+            for j, stage in enumerate(PROJECT_STAGES, start=1):
+                subject = f"DEMO {plan.abbr}-{i:03d} {stage}"
+                stage_start = add_months(start, j - 1)
+                self.ensure(
+                    "Task",
+                    {"subject": subject, "project": project},
+                    {
+                        "subject": subject,
+                        "project": project,
+                        "company": plan.name,
+                        "status": "Completed" if stage_start < getdate("2026-05-01") else "Open",
+                        "exp_start_date": stage_start,
+                        "exp_end_date": add_months(stage_start, 1),
+                        "expected_time": 120 + j * 16,
+                    },
+                )
+
+    def masters(self) -> None:
+        # Require setup first; explicit failure instead of half-created records.
+        missing = [plan.name for plan in COMPANIES if not frappe.db.exists("Company", plan.name)]
+        if missing:
+            frappe.throw("Run phase=setup before masters. Missing: " + ", ".join(missing))
+        self._materials()
+        frappe.db.commit()
+        for plan in COMPANIES:
+            self._parties(plan)
+            self._departments(plan)
+            self._employees(plan)
+            self._projects(plan)
+            frappe.db.commit()
+
+    def assets(self) -> None:
+        """Create fixed-asset equipment as DRAFT; no unbalanced GL entries."""
+        if not frappe.db.exists("Item Group", {"item_group_name": "DEMO Construction Materials"}):
+            frappe.throw("Run phase=masters before assets")
+        from erpnext.setup.construction_demo.equipment import seed_equipment
+        seed_equipment(self)
+        frappe.db.commit()
