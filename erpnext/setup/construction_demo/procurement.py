@@ -65,7 +65,7 @@ def _purchase_order(seed, plan, project, index, month, posting):
             "warehouse": site,
             "schedule_date": add_days(posting, 4),
             "project": project,
-            "cost_center": seed.default_cost_center(plan.name),
+            "cost_center": frappe.db.get_value("Project", project, "cost_center"),
         })
     po = frappe.get_doc({
         "doctype": "Purchase Order",
@@ -82,7 +82,7 @@ def _purchase_order(seed, plan, project, index, month, posting):
         "price_list_currency": plan.currency,
         "plc_conversion_rate": 1,
         "project": project,
-        "cost_center": seed.default_cost_center(plan.name),
+        "cost_center": frappe.db.get_value("Project", project, "cost_center"),
         "set_warehouse": site,
         "items": items,
     })
@@ -175,7 +175,7 @@ def _consume(seed, plan, receipt, project, posting):
             "expense_account": frappe.db.get_value(
                 "Company", plan.name, "default_expense_account"
             ),
-            "cost_center": seed.default_cost_center(plan.name),
+            "cost_center": frappe.db.get_value("Project", project, "cost_center"),
             "project": project,
         })
     doc = frappe.get_doc({
@@ -188,7 +188,7 @@ def _consume(seed, plan, receipt, project, posting):
         "posting_date": posting,
         "posting_time": "11:00:00",
         "project": project,
-        "cost_center": seed.default_cost_center(plan.name),
+        "cost_center": frappe.db.get_value("Project", project, "cost_center"),
         "remarks": marker,
         "items": stock_rows,
     })
