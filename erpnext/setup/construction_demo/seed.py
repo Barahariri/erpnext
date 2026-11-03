@@ -68,6 +68,11 @@ def run(
     if int(dry_run):
         return result
 
+    if phase in ("hrms", "all") and "hrms" not in installed:
+        frappe.throw(
+            "Frappe HRMS version-16 must be installed on the DEMO site "
+            "before running phase=all or phase=hrms."
+        )
     if confirmation != CONFIRMATION:
         frappe.throw("Explicit demo confirmation is required: " + CONFIRMATION)
     if not frappe.conf.get("construction_demo_enabled"):
