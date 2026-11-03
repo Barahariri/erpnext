@@ -50,6 +50,8 @@ def report() -> dict:
             "employees": _count("Employee", {"company": plan.name, "employee_number": ["like", f"DEMO-{plan.abbr}-EMP-%"]}),
             "projects": _count("Project", {"company": plan.name, "project_name": ["like", f"DEMO-{plan.abbr}-PRJ-%"]}),
             "assets": _count("Asset", {"company": plan.name, "asset_name": ["like", f"DEMO-{plan.abbr}-ASSET-%"]}),
+            "assets_submitted": _count("Asset", {"company": plan.name, "asset_name": ["like", f"DEMO-{plan.abbr}-ASSET-%"], "docstatus": 1}),
+            "project_warehouses": _count("Warehouse", {"company": plan.name, "warehouse_name": ["like", f"DEMO {plan.abbr} PROJECT %"]}),
             "sales_orders": _count("Sales Order", {"company": plan.name, "po_no": ["like", f"DEMO-{plan.abbr}-CONTRACT-%"], "docstatus": 1}),
             "sales_invoices": _count("Sales Invoice", {"company": plan.name, "po_no": ["like", f"DEMO-{plan.abbr}-PRJ-%"], "docstatus": 1}),
             "purchase_orders": _count("Purchase Order", {"company": plan.name, "order_confirmation_no": ["like", f"DEMO-{plan.abbr}-STOCK-%"], "docstatus": 1}),
@@ -62,6 +64,56 @@ def report() -> dict:
                 "Salary Slip", {"company": plan.name, "docstatus": 1}
             )
             counts["attendance_samples"] = _count("Attendance", {"company": plan.name})
+        # Verify that the names also carry actual asset and project context.
+        if frappe.get_meta("Asset").has_field("custom_demo_model"):
+            equipment = frappe.db.get_all(
+                "Asset",
+                filters={"company": plan.name, "asset_name": ["like", f"DEMO-{plan.abbr}-ASSET-%"]},
+                fields=[
+                    "name", "custom_demo_manufacturer", "custom_demo_model",
+                    "custom_demo_serial", "custom_demo_assigned_project",
+                    "custom_demo_operating_site", "custom_demo_hour_meter",
+                ],
+            )
+            bad_equipment = [
+                row.name for row in equipment
+                if not all([
+                    row.custom_demo_manufacturer, row.custom_demo_model,
+                    row.custom_demo_serial, row.custom_demo_assigned_project,
+                    row.custom_demo_operating_site, row.custom_demo_hour_meter,
+                ]) or frappe.db.get_value(
+                    "Project", row.custom_demo_assigned_project, "company"
+                ) != plan.name
+            ]
+            if bad_equipment:
+                summary["errors"].append(
+                    f"{plan.abbr}: missing model/serial/site or invalid project on {len(bad_equipment)} equipment records"
+                )
+        else:
+            summary["warnings"].append(f"{plan.abbr}: demo Asset metadata fields are not installed")
+
+        if frappe.get_meta("Project").has_field("custom_demo_scope"):
+            projects = frappe.db.get_all(
+                "Project",
+                filters={"company": plan.name, "project_name": ["like", f"DEMO-{plan.abbr}-PRJ-%"]},
+                fields=["name", "custom_demo_scope", "custom_demo_district", "custom_demo_sector"],
+            )
+            invalid = [row.name for row in projects if not (
+                row.custom_demo_scope and row.custom_demo_district and row.custom_demo_sector
+            )]
+            if invalid:
+                summary["errors"].append(
+                    f"{plan.abbr}: {len(invalid)} projects missing named scope/location/sector"
+                )
+        else:
+            summary["warnings"].append(f"{plan.abbr}: demo Project metadata fields are not installed")
+
+        if counts["assets_submitted"] < counts["assets"]:
+            summary["warnings"].append(
+                f"{plan.abbr}: {counts['assets'] - counts['assets_submitted']} assets remain draft"
+            )
+        if counts["project_warehouses"] < counts["projects"]:
+            summary["warnings"].append(f"{plan.abbr}: project-specific warehouses incomplete")
         financial = _gl_balance(plan.name)
         summary["companies"][plan.abbr] = {
             "company": plan.name,
