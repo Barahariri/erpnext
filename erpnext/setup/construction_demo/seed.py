@@ -234,6 +234,12 @@ class ConstructionDemo:
             )
 
     def _materials(self):
+        # Work progress is naturally fractional; ERPNext "Nos" rejects
+        # decimal percentages when its UOM requires whole numbers.
+        self.ensure(
+            "UOM", {"uom_name": "DEMO Percent Point"},
+            {"uom_name": "DEMO Percent Point", "must_be_whole_number": 0},
+        )
         self.ensure(
             "Item Group",
             {"item_group_name": "DEMO Construction Materials"},
@@ -259,7 +265,7 @@ class ConstructionDemo:
                 "item_code": "DEMO-CONSTRUCTION-SERVICE",
                 "item_name": "DEMO Work Progress Certificate Service",
                 "item_group": "DEMO Construction Services",
-                "stock_uom": "Nos",
+                "stock_uom": "DEMO Percent Point",
                 "is_stock_item": 0,
                 "is_sales_item": 1,
                 "is_purchase_item": 1,
