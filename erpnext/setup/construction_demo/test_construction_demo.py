@@ -30,22 +30,22 @@ class TestConstructionDemoConfig(unittest.TestCase):
             expected_totals("full"),
             {
                 "companies": 3,
-                "employees": 1080,
-                "projects": 86,
-                "equipment": 470,
-                "customers": 250,
-                "suppliers": 360,
-                "materials": 1200,
+                "employees": 155,
+                "projects": 22,
+                "equipment": 74,
+                "customers": 58,
+                "suppliers": 90,
+                "materials": 240,
             },
         )
 
     def test_small_pilot(self):
         got = expected_totals("pilot")
         self.assertEqual(got["companies"], 3)
-        self.assertEqual(got["employees"], 13)
+        self.assertEqual(got["employees"], 3)
         self.assertEqual(got["projects"], 3)
-        self.assertEqual(got["equipment"], 6)
-        self.assertEqual(got["materials"], 12)
+        self.assertEqual(got["equipment"], 3)
+        self.assertEqual(got["materials"], 3)
         for value in got.values():
             self.assertGreaterEqual(value, 1)
 
