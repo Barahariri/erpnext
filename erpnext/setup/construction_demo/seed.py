@@ -32,7 +32,7 @@ from erpnext.setup.construction_demo.config import (
     scaled,
 )
 
-VALID_PHASES = ("setup", "masters", "assets", "transactions", "all")
+VALID_PHASES = ("setup", "masters", "assets", "transactions", "procurement", "hrms", "all")
 
 
 def run(
@@ -40,17 +40,21 @@ def run(
     scale: str = "pilot",
     phase: str = "all",
     confirmation: str | None = None,
+    tax_mode: str = "country",
 ) -> dict:
     """Bench entry point. Defaults to a read-only, lightweight preview."""
     if scale not in ("pilot", "full"):
         frappe.throw("scale must be pilot or full")
     if phase not in VALID_PHASES:
         frappe.throw("phase must be one of: " + ", ".join(VALID_PHASES))
+    if tax_mode not in ("country", "simulated"):
+        frappe.throw("tax_mode must be country or simulated")
 
     result = {
         "seed_version": SEED_VERSION,
         "phase": phase,
         "scale": scale,
+        "tax_mode": tax_mode,
         "dry_run": bool(int(dry_run)),
         "expected": expected_totals(scale),
         "period": ["2023-11-01", "2026-10-31"],
@@ -71,7 +75,7 @@ def run(
     if frappe.session.user != "Administrator":
         frappe.throw("Run this offline via bench execute as Administrator")
 
-    seed = ConstructionDemo(scale)
+    seed = ConstructionDemo(scale, tax_mode=tax_mode)
     if phase in ("setup", "all"):
         seed.setup()
     if phase in ("masters", "all"):
@@ -81,6 +85,12 @@ def run(
     if phase in ("transactions", "all"):
         from erpnext.setup.construction_demo.transactions import seed_transactions
         seed_transactions(seed)
+    if phase in ("procurement", "all"):
+        from erpnext.setup.construction_demo.procurement import seed_procurement
+        seed_procurement(seed)
+    if phase in ("hrms", "all"):
+        from erpnext.setup.construction_demo.hrms_seed import seed_hrms
+        seed_hrms(seed)
     result["created"] = dict(seed.created)
     result["already_exists"] = dict(seed.existing)
     result["warnings"].extend(seed.warnings)
@@ -88,8 +98,10 @@ def run(
 
 
 class ConstructionDemo:
-    def __init__(self, scale: str):
+    def __init__(self, scale: str, tax_mode: str = "country"):
         self.scale = scale
+        self.tax_mode = tax_mode
+        self.companies = COMPANIES
         self.created = Counter()
         self.existing = Counter()
         self.warnings: list[str] = []
@@ -183,6 +195,13 @@ class ConstructionDemo:
         for plan in COMPANIES:
             self._company(plan)
             frappe.db.commit()
+        from erpnext.setup.construction_demo.taxes import setup_taxes
+        from erpnext.setup.construction_demo.print_format import install_print_format
+        from erpnext.setup.construction_demo.contracts import payment_terms
+        setup_taxes(self)
+        payment_terms(self)
+        install_print_format(self)
+        frappe.db.commit()
 
     @staticmethod
     def customer_label(plan, index: int) -> str:
