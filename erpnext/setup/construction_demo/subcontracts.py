@@ -75,7 +75,7 @@ def ensure_subcontract(seed, plan, project, index, start):
         "order_confirmation_no": marker,
         "order_confirmation_date": start,
         "currency": plan.currency, "conversion_rate": 1,
-        "buying_price_list": "Standard Buying",
+        "buying_price_list": f"DEMO {plan.abbr} Buying",
         "price_list_currency": plan.currency,
         "plc_conversion_rate": 1,
         "project": project,
