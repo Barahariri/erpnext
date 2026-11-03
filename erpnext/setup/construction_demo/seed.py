@@ -164,6 +164,9 @@ class ConstructionDemo:
 
     def _fiscal_years(self):
         for year in (2023, 2024, 2025, 2026):
+            if frappe.db.exists("Fiscal Year", {"year_start_date": ["<=", date(year, 1, 1)], "year_end_date": [">=", date(year, 12, 31)]}):
+                self.existing["Fiscal Year"] += 1
+                continue
             label = "DEMO-FY-" + str(year)
             self.ensure(
                 "Fiscal Year",
@@ -292,6 +295,7 @@ class ConstructionDemo:
                 {"employee_number": number},
                 {
                     "employee_number": number,
+                    "naming_series": "HR-EMP-",
                     "first_name": first,
                     "last_name": last,
                     "company": plan.name,
@@ -299,6 +303,7 @@ class ConstructionDemo:
                     "date_of_birth": date(year, month, day),
                     "date_of_joining": date(2019 + i % 5, month, day),
                     "status": "Active" if i % 13 else "Left",
+                    "relieving_date": date(2026, 1, 1) if i % 13 == 0 else None,
                     "department": frappe.db.get_value(
                         "Department",
                         {"department_name": department, "company": plan.name},
@@ -327,6 +332,7 @@ class ConstructionDemo:
                 {"project_name": label, "company": plan.name},
                 {
                     "project_name": label,
+                    "naming_series": "PROJ-.####",
                     "company": plan.name,
                     "customer": customer,
                     "expected_start_date": start,
