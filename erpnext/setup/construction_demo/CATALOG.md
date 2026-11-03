@@ -88,6 +88,7 @@
 - ساعات التشغيل: رقم تجريبي محدد وفق معادلة ثابتة
 - الحالة: Assigned / Idle / Under Maintenance
 - سعر الاقتناء، التمويل والإهلاك: معاملات تجريبية وليست سجل شركة مصنّعة
+- تكاليف الوقود: قيود مصروفات ربع سنوية تجريبية مرتبطة بالمشروع ومركز تكلفته
 
 **التحقق من أسماء الموديلات:**
 - [Caterpillar Excavators](https://www.cat.com/en_US/by-industry/construction/excavator-family.html)
