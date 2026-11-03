@@ -11,23 +11,23 @@ HRMS did NOT appear in the reported installed applications.
 
 | Company | Country | Currency | Staff | Projects | Equipment | Customers | Suppliers |
 |---|---|---|---:|---:|---:|---:|---:|
-| شركة ركيزة الأفق للمقاولات العامة | Kuwait | KWD | 410 | 34 | 190 | 100 | 140 |
-| شركة رواسي الدوحة للإنشاءات | Qatar | QAR | 350 | 28 | 150 | 80 | 120 |
-| شركة مدائن الشام للهندسة والمقاولات | Syria | SYP | 320 | 24 | 130 | 70 | 100 |
+| شركة ركيزة الأفق للمقاولات العامة | Kuwait | KWD | 60 | 9 | 30 | 24 | 35 |
+| شركة رواسي الدوحة للإنشاءات | Qatar | QAR | 50 | 7 | 24 | 18 | 30 |
+| شركة مدائن الشام للهندسة والمقاولات | Syria | SYP | 45 | 6 | 20 | 16 | 25 |
 
-Period: 2023-11-01 to 2026-10-31. Sample stock materials: 1,200.
+Period: 2023-11-01 to 2026-10-31. Sample stock materials: 240. Each project has a non-generic Arabic name, real district and detailed scope. See [CATALOG.md](CATALOG.md) for the complete list of 22 projects and 18 manufacturer/model combinations.
 
 ## Included records
 
-- Three separate Company accounts with standard charts of accounts, fiscal years, cost centers and site warehouses.
-- Customer/Supplier, 1,080 Employee, Department, Designation, material and service Item masters.
-- 86 Projects and 5 linked Tasks per project; 86 native Sales Orders with BOQ work-package rows.
+- Three separate Company accounts with standard charts of accounts, fiscal years, geographic cost centers, 22 project warehouses and Kuwait's Ahmadi branch.
+- Customer/Supplier, 155 Employee, Department, Designation, material and service Item masters.
+- 22 Projects and 5 linked Tasks per project; 22 native Sales Orders with BOQ work-package rows.
 - Partial progress Sales Invoices tied to their Sales Order BOQ rows; 95% due, 5% delayed retention (NOT a tax).
-- 86 subcontract Purchase Orders with three BOQ packages; periodical linked contractor Purchase Invoices.
+- 22 subcontract Purchase Orders with three BOQ packages; periodical linked contractor Purchase Invoices.
 - Purchase Order -> Receipt -> Purchase Invoice -> Stock Entry (issue to project) -> supplier Payment Entry.
 - Synthetic balanced capital opening Journal Entries and customer receipts with paid/part-paid/unpaid states.
 - Optional Frappe HRMS salary structure, assignment, salary slips, two attendance days/month, leave allocations and aggregate payroll journals.
-- 470 submitted Existing Assets, funded by DEMO in-kind equity or equipment-financing liability Journal Entries, and 60-month depreciation schedules posted to the end of the simulation. Some pending repair records.
+- 74 submitted Existing Assets, funded by DEMO in-kind equity or equipment-financing liability Journal Entries, and 60-month depreciation schedules posted to the end of the simulation. Some pending repair records.
 - Dedicated bilingual Sales Invoice print format watermarked as DEMO.
 - Read-only audit for counts, General Ledger balance and unexpected non-simulated tax rates.
 
@@ -49,9 +49,12 @@ Country tax mode (default) generates an informational 0% row, which does NOT imp
 - subcontracts.py — subcontract BOQ order
 - transactions.py — submitted progress and supplier invoices
 - procurement.py — procurement, stock movement, supplier payment
-- equipment.py — Asset register, synthetic funded acquisition, equipment depreciation and repairs
+- equipment.py — 74 named machine Asset registers, realistic manufacturer/model items, synthetic serials, hour meters, linked project, financing, depreciation and repairs
 - hrms_seed.py — optional payroll and leave simulation
-- audit.py — read-only post-run verification
+- custom_fields.py — project district/scope/branch and machine manufacturer/model/serial/hour meter/status fields
+- catalog_check.py — offline validation of catalogue names, counts and scope
+- CATALOG.md — the exact 22 projects and 18 machine manufacturer/model names
+- audit.py — read-only post-run verification including project scope and machine identity
 
 ## Docker: image build prerequisite
 
