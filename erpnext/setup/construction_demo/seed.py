@@ -91,7 +91,10 @@ def run(
         seed.assets()
     if phase in ("transactions", "all"):
         from erpnext.setup.construction_demo.transactions import seed_transactions
+        from erpnext.setup.construction_demo.equipment_usage import seed_equipment_usage
+
         seed_transactions(seed)
+        seed_equipment_usage(seed)
     if phase in ("procurement", "all"):
         from erpnext.setup.construction_demo.procurement import seed_procurement
         seed_procurement(seed)
