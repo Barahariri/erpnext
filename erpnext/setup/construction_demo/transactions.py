@@ -9,7 +9,7 @@ from datetime import timedelta
 import frappe
 from frappe.utils import add_days, add_months, getdate
 
-from erpnext.setup.construction_demo.config import COMPANIES, START_DATE, END_DATE, scaled
+from erpnext.setup.construction_demo.config import COMPANIES, START_DATE, END_DATE, billing_cycles, scaled
 
 
 def _account(plan, fieldname: str) -> str:
@@ -249,7 +249,7 @@ def seed_transactions(seed):
             subcontract = ensure_subcontract(seed, plan, project, index, start)
             multiplier = {"KRC": 1, "RDC": 10, "MSE": 100000}[plan.abbr]
 
-            for cycle in range(1, 9):
+            for cycle in range(1, billing_cycles(plan, index) + 1):
                 posting = add_months(start, (cycle - 1) * 2)
                 posting = posting.replace(day=15)
                 if posting > end_date:
@@ -266,7 +266,7 @@ def seed_transactions(seed):
                 if cycle % 3 == 0:
                     _ensure_customer_receipt(
                         seed, plan, invoice, index, cycle,
-                        min(add_days(posting, 20), end_date), 1.0
+                        min(add_days(posting, 20), end_date), 0.95
                     )
                 elif cycle % 4 == 0:
                     _ensure_customer_receipt(
