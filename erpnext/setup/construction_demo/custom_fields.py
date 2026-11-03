@@ -26,10 +26,17 @@ def install_demo_fields():
                 "insert_after": "custom_demo_district",
             },
             {
+                "fieldname": "custom_demo_branch",
+                "label": "الفرع المسؤول / Demo Branch",
+                "fieldtype": "Link",
+                "options": "Branch",
+                "insert_after": "custom_demo_scope",
+            },
+            {
                 "fieldname": "custom_demo_sector",
                 "label": "نوع المشروع / Demo Sector",
                 "fieldtype": "Data",
-                "insert_after": "custom_demo_scope",
+                "insert_after": "custom_demo_branch",
             },
         ],
         "Asset": [
