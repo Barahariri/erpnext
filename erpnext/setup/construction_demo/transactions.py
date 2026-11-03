@@ -111,7 +111,7 @@ def _ensure_sales_invoice(seed, plan, project, customer, sales_order, index, cyc
     return doc
 
 
-def _ensure_purchase_invoice(seed, plan, project, supplier, index, cycle, posting, amount):
+def _ensure_purchase_invoice(seed, plan, project, supplier, subcontract, index, cycle, posting, amount):
     ref = _invoice_key(plan, index, cycle, "P")
     existing = frappe.db.exists(
         "Purchase Invoice", {"company": plan.name, "bill_no": ref, "supplier": supplier}
@@ -140,32 +140,7 @@ def _ensure_purchase_invoice(seed, plan, project, supplier, index, cycle, postin
         "credit_to": _account(plan, "default_payable_account"),
         "cost_center": seed.default_cost_center(plan.name),
         "remarks": "DEMO ONLY: fictional subcontractor progress expense.",
-        "items": [
-            {
-                "item_code": "DEMO-CONSTRUCTION-SERVICE",
-                "description": f"Subcontracted earthworks | DEMO bill {cycle}",
-                "qty": 1, "rate": round(amount * 0.35, 2),
-                "expense_account": _account(plan, "default_expense_account"),
-                "cost_center": seed.default_cost_center(plan.name),
-                "project": project,
-            },
-            {
-                "item_code": "DEMO-CONSTRUCTION-SERVICE",
-                "description": f"Concrete and structural labor | DEMO bill {cycle}",
-                "qty": 1, "rate": round(amount * 0.45, 2),
-                "expense_account": _account(plan, "default_expense_account"),
-                "cost_center": seed.default_cost_center(plan.name),
-                "project": project,
-            },
-            {
-                "item_code": "DEMO-CONSTRUCTION-SERVICE",
-                "description": f"MEP subcontractor labor | DEMO bill {cycle}",
-                "qty": 1, "rate": round(amount * 0.20, 2),
-                "expense_account": _account(plan, "default_expense_account"),
-                "cost_center": seed.default_cost_center(plan.name),
-                "project": project,
-            },
-        ],
+        "items": __subcontract_lines(seed, plan, subcontract, amount, cycle),
     })
     from erpnext.setup.construction_demo.taxes import apply_taxes
     apply_taxes(doc, plan, mode=seed.tax_mode, simulated=(cycle % 6 == 0))
@@ -222,6 +197,12 @@ def _ensure_customer_receipt(seed, plan, invoice, index, cycle, posting, fractio
     seed.created["Payment Entry"] += 1
 
 
+def __subcontract_lines(seed, plan, order, amount, cycle):
+    from erpnext.setup.construction_demo.subcontracts import subcontract_invoice_lines
+
+    return subcontract_invoice_lines(seed, plan, order, amount, cycle)
+
+
 def __progress_lines(seed, plan, order, amount):
     from erpnext.setup.construction_demo.contracts import progress_lines
 
@@ -238,6 +219,7 @@ def seed_transactions(seed):
             frappe.throw("Run phase=masters before transactions")
 
         from erpnext.setup.construction_demo.contracts import ensure_sales_order
+        from erpnext.setup.construction_demo.subcontracts import ensure_subcontract
         _ensure_opening_cash(seed, plan)
         frappe.db.commit()
         for index in range(1, scaled(plan.projects, seed.scale) + 1):
@@ -261,6 +243,7 @@ def seed_transactions(seed):
             )
             start = add_months(getdate(START_DATE), (index * 7) % 28)
             order = ensure_sales_order(seed, plan, project, customer, index, start)
+            subcontract = ensure_subcontract(seed, plan, project, index, start)
             multiplier = {"KRC": 1, "RDC": 10, "MSE": 100000}[plan.abbr]
 
             for cycle in range(1, 9):
@@ -274,7 +257,7 @@ def seed_transactions(seed):
                     seed, plan, project, customer, order, index, cycle, posting, revenue
                 )
                 _ensure_purchase_invoice(
-                    seed, plan, project, supplier, index, cycle, posting, expense
+                    seed, plan, project, supplier, subcontract, index, cycle, posting, expense
                 )
                 # Intentional mixture: full, partial and unpaid receivables.
                 if cycle % 3 == 0:
