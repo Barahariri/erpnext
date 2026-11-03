@@ -64,7 +64,7 @@ def ensure_subcontract(seed, plan, project, index, start):
             "rate": float(amount * Decimal(weight) / Decimal("100")),
             "schedule_date": add_months(start, 20),
             "project": project,
-            "cost_center": seed.default_cost_center(plan.name),
+            "cost_center": seed.project_cost_center(plan, index),
         })
     contract = frappe.get_doc({
         "doctype": "Purchase Order",
@@ -79,7 +79,7 @@ def ensure_subcontract(seed, plan, project, index, start):
         "price_list_currency": plan.currency,
         "plc_conversion_rate": 1,
         "project": project,
-        "cost_center": seed.default_cost_center(plan.name),
+        "cost_center": seed.project_cost_center(plan, index),
         "items": items,
     })
     from erpnext.setup.construction_demo.taxes import apply_taxes
@@ -107,7 +107,7 @@ def subcontract_invoice_lines(seed, plan, order, amount, cycle):
             "expense_account": frappe.db.get_value(
                 "Company", plan.name, "default_expense_account",
             ),
-            "cost_center": seed.default_cost_center(plan.name),
+            "cost_center": frappe.db.get_value("Project", order.project, "cost_center"),
             "project": order.project,
         })
     return lines
