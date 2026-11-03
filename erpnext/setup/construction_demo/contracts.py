@@ -111,7 +111,7 @@ def ensure_sales_order(seed, plan, project, customer, index, start):
         "title": f"DEMO Construction Contract | {project}",
         "currency": plan.currency,
         "conversion_rate": 1,
-        "selling_price_list": "Standard Selling",
+        "selling_price_list": f"DEMO {plan.abbr} Selling",
         "price_list_currency": plan.currency,
         "plc_conversion_rate": 1,
         "payment_terms_template": payment_terms(seed),
