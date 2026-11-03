@@ -246,7 +246,28 @@ class ConstructionDemo:
                 },
             )
 
+    def _warehouse_types(self):
+        """ERPNext 16 Company.on_update creates a Goods In Transit warehouse.
+
+        On a brand-new site, the optional Stock fixture defining its required
+        Warehouse Type may not yet exist. Create it using the DocType API
+        before any Company is inserted. Idempotent and DEMO-site-only.
+        """
+        if frappe.db.exists("Warehouse Type", "Transit"):
+            self.existing["Warehouse Type"] += 1
+            return
+        self.ensure(
+            "Warehouse Type",
+            {"name": "Transit"},
+            {
+                "name": "Transit",
+                "description": "Required by ERPNext for Goods In Transit warehouses",
+            },
+        )
+        frappe.db.commit()
+
     def setup(self) -> None:
+        self._warehouse_types()
         self._fiscal_years()
         for plan in COMPANIES:
             self._company(plan)
