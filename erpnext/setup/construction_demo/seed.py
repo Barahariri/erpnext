@@ -24,7 +24,9 @@ from erpnext.setup.construction_demo.config import (
     FIRST_NAMES,
     LAST_NAMES,
     MATERIALS,
+    MATERIAL_COUNT,
     ORG_NAMES,
+    PROJECT_CATALOG,
     PROJECT_STAGES,
     PROJECT_TYPES,
     SEED_VERSION,
@@ -208,8 +210,10 @@ class ConstructionDemo:
             self._company(plan)
             frappe.db.commit()
         from erpnext.setup.construction_demo.taxes import setup_taxes
+        from erpnext.setup.construction_demo.custom_fields import install_demo_fields
         from erpnext.setup.construction_demo.print_format import install_print_format
         from erpnext.setup.construction_demo.contracts import payment_terms
+        install_demo_fields()
         setup_taxes(self)
         payment_terms(self)
         install_print_format(self)
@@ -227,9 +231,14 @@ class ConstructionDemo:
 
     @staticmethod
     def project_label(plan, index: int) -> str:
-        category = PROJECT_TYPES[(index - 1) % len(PROJECT_TYPES)]
-        site = plan.sites[index % len(plan.sites)]
-        return f"DEMO-{plan.abbr}-PRJ-{index:03d} | {category} - {site}"
+        projects = PROJECT_CATALOG[plan.abbr]
+        if not 1 <= index <= len(projects):
+            raise ValueError(f"Unknown {plan.abbr} construction project #{index}")
+        specification = projects[index - 1]
+        return (
+            f"DEMO-{plan.abbr}-PRJ-{index:03d} | "
+            f"{specification.name} - {specification.district}"
+        )
 
     def _parties(self, plan):
         for i in range(1, scaled(plan.customers, self.scale) + 1):
@@ -284,7 +293,7 @@ class ConstructionDemo:
                 "description": "Synthetic construction work item for demo invoices.",
             },
         )
-        for i in range(1, scaled(1200, self.scale) + 1):
+        for i in range(1, scaled(MATERIAL_COUNT, self.scale) + 1):
             material = MATERIALS[(i - 1) % len(MATERIALS)]
             code = f"DEMO-MAT-{i:04d}"
             self.ensure(
@@ -358,12 +367,25 @@ class ConstructionDemo:
         clients = scaled(plan.customers, self.scale)
         for i in range(1, scaled(plan.projects, self.scale) + 1):
             label = self.project_label(plan, i)
+            spec = PROJECT_CATALOG[plan.abbr][i - 1]
             customer_name = self.customer_label(plan, 1 + ((i - 1) % clients))
             customer = frappe.db.get_value(
                 "Customer", {"customer_name": customer_name}, "name"
             )
             start = add_months(getdate("2023-11-01"), (i * 7) % 28)
-            finish = add_months(start, 5 + (i % 8))
+            finish = add_months(start, spec.duration_months)
+            self.ensure(
+                "Warehouse",
+                {
+                    "warehouse_name": f"DEMO {plan.abbr} PROJECT {i:03d} {spec.district}",
+                    "company": plan.name,
+                },
+                {
+                    "warehouse_name": f"DEMO {plan.abbr} PROJECT {i:03d} {spec.district}",
+                    "company": plan.name,
+                    "is_group": 0,
+                },
+            )
             project = self.ensure(
                 "Project",
                 {"project_name": label, "company": plan.name},
@@ -376,7 +398,10 @@ class ConstructionDemo:
                     "expected_end_date": finish,
                     "status": "Completed" if finish < getdate("2026-10-31") else "Open",
                     "estimated_costing": (30000 + 17000 * i) * (3 if plan.abbr == "RDC" else 1),
-                    "notes": "DEMO ONLY - artificial contract and cost data.",
+                    "notes": f"DEMO ONLY | {spec.name} | {spec.district} | {spec.scope}",
+                    "custom_demo_district": spec.district,
+                    "custom_demo_scope": spec.scope,
+                    "custom_demo_sector": spec.sector,
                     "cost_center": self.default_cost_center(plan.name),
                 },
             )
