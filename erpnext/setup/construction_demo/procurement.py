@@ -75,7 +75,7 @@ def _purchase_order(seed, plan, project, index, month, posting):
         "order_confirmation_date": posting,
         "currency": plan.currency,
         "conversion_rate": 1,
-        "buying_price_list": "Standard Buying",
+        "buying_price_list": f"DEMO {plan.abbr} Buying",
         "price_list_currency": plan.currency,
         "plc_conversion_rate": 1,
         "project": project,
