@@ -158,6 +158,18 @@ class ConstructionDemo:
                     "valuation_method": "FIFO",
                 },
             )
+        for side in ("Selling", "Buying"):
+            self.ensure(
+                "Price List",
+                {"price_list_name": f"DEMO {plan.abbr} {side}"},
+                {
+                    "price_list_name": f"DEMO {plan.abbr} {side}",
+                    "currency": plan.currency,
+                    "selling": 1 if side == "Selling" else 0,
+                    "buying": 1 if side == "Buying" else 0,
+                    "enabled": 1,
+                },
+            )
         for site in plan.sites:
             self.ensure(
                 "Warehouse",
