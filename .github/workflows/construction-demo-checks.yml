@@ -1,0 +1,50 @@
+name: Construction demo source checks
+
+on:
+  push:
+    branches:
+      - feature/construction-enterprise-demo
+    paths:
+      - "erpnext/setup/construction_demo/**"
+      - ".github/workflows/construction-demo-checks.yml"
+  pull_request:
+    branches:
+      - version-16
+    paths:
+      - "erpnext/setup/construction_demo/**"
+      - ".github/workflows/construction-demo-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the feature commit
+        uses: actions/checkout@v4
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Compile every demo Python module
+        run: python -m compileall -q erpnext/setup/construction_demo
+      - name: Run Ruff critical static checks
+        run: |
+          pip install ruff
+          ruff check --isolated --select E9,F63,F7,F82 erpnext/setup/construction_demo
+      - name: Check human-readable project and equipment catalogue
+        run: python erpnext/setup/construction_demo/catalog_check.py
+      - name: Validate targeted Docker deployment shell syntax
+        run: bash -n erpnext/setup/construction_demo/deploy-erpnext-demo.sh
+      - name: Confirm required files exist
+        run: |
+          test -f erpnext/setup/construction_demo/config.py
+          test -f erpnext/setup/construction_demo/seed.py
+          test -f erpnext/setup/construction_demo/taxes.py
+          test -f erpnext/setup/construction_demo/hrms_seed.py
+          test -f erpnext/setup/construction_demo/procurement.py
+          test -f erpnext/setup/construction_demo/audit.py
+          test -f erpnext/setup/construction_demo/README.md
