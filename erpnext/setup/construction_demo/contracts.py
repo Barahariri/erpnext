@@ -11,7 +11,7 @@ from decimal import Decimal
 import frappe
 from frappe.utils import add_days, add_months, getdate
 
-from erpnext.setup.construction_demo.config import PROJECT_STAGES, START_DATE
+from erpnext.setup.construction_demo.config import PROJECT_STAGES, START_DATE, billing_cycles
 
 BOQ_SPLIT = ("0.07", "0.22", "0.35", "0.25", "0.11")
 assert sum(Decimal(x) for x in BOQ_SPLIT) == Decimal("1.00")
@@ -57,7 +57,7 @@ def expected_value(plan, index, start):
     cutoff = getdate("2026-10-31")
     multiplier = {"KRC": 1, "RDC": 10, "MSE": 100000}[plan.abbr]
     total = Decimal("0")
-    for cycle in range(1, 9):
+    for cycle in range(1, billing_cycles(plan, index) + 1):
         posting = add_months(start, (cycle - 1) * 2).replace(day=15)
         if posting > cutoff:
             continue
