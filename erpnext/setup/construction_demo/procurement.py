@@ -83,13 +83,15 @@ def _purchase_order(seed, plan, project, index, month, posting):
         "set_warehouse": site,
         "items": items,
     })
+    from erpnext.setup.construction_demo.taxes import apply_taxes
+    apply_taxes(po, plan, mode=seed.tax_mode, simulated=(month % 3 == 0))
     po.insert(ignore_permissions=True)
     po.submit()
     seed.created["Purchase Order"] += 1
     return po
 
 
-def _receipt(seed, po, posting):
+def _receipt(seed, plan, po, month, posting):
     existing = frappe.db.get_value(
         "Purchase Receipt Item",
         {"purchase_order": po.name, "parenttype": "Purchase Receipt"},
@@ -109,13 +111,15 @@ def _receipt(seed, po, posting):
     pr.posting_date = posting
     pr.posting_time = "10:30:00"
     pr.set_posting_time = 1
+    from erpnext.setup.construction_demo.taxes import apply_taxes
+    apply_taxes(pr, plan, mode=seed.tax_mode, simulated=(month % 3 == 0))
     pr.insert(ignore_permissions=True)
     pr.submit()
     seed.created["Purchase Receipt"] += 1
     return pr
 
 
-def _receipt_invoice(seed, plan, receipt, posting):
+def _receipt_invoice(seed, plan, receipt, month, posting):
     existing = frappe.db.get_value(
         "Purchase Invoice Item",
         {"purchase_receipt": receipt.name, "parenttype": "Purchase Invoice"},
@@ -138,6 +142,8 @@ def _receipt_invoice(seed, plan, receipt, posting):
     inv.bill_no = f"DEMO-BILL-{receipt.name}"
     inv.bill_date = posting
     inv.due_date = add_days(posting, 30)
+    from erpnext.setup.construction_demo.taxes import apply_taxes
+    apply_taxes(inv, plan, mode=seed.tax_mode, simulated=(month % 3 == 0))
     inv.insert(ignore_permissions=True)
     inv.submit()
     seed.created["Purchase Invoice"] += 1
@@ -251,8 +257,8 @@ def seed_procurement(seed):
                 if posting > cutoff or add_days(posting, 4) > cutoff:
                     continue
                 po = _purchase_order(seed, plan, project, index, month, posting)
-                received = _receipt(seed, po, add_days(posting, 4))
-                inv = _receipt_invoice(seed, plan, received, add_days(posting, 5))
+                received = _receipt(seed, plan, po, month, add_days(posting, 4))
+                inv = _receipt_invoice(seed, plan, received, month, add_days(posting, 5))
                 if add_days(posting, 15) <= cutoff:
                     _consume(seed, plan, received, project, add_days(posting, 15))
                 if add_days(posting, 20) <= cutoff:
