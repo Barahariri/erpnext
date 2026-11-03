@@ -224,13 +224,13 @@ class ConstructionDemo:
             label = self.customer_label(plan, i)
             self.ensure(
                 "Customer", {"customer_name": label},
-                {"customer_name": label, "customer_type": "Company"},
+                {"customer_name": label, "customer_type": "Company", "naming_series": "CUST-.YYYY.-"},
             )
         for i in range(1, scaled(plan.suppliers, self.scale) + 1):
             label = self.supplier_label(plan, i)
             self.ensure(
                 "Supplier", {"supplier_name": label},
-                {"supplier_name": label, "supplier_type": "Company"},
+                {"supplier_name": label, "supplier_type": "Company", "naming_series": "SUP-.YYYY.-"},
             )
 
     def _materials(self):
