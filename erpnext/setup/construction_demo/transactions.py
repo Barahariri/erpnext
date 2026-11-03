@@ -94,7 +94,7 @@ def _ensure_sales_invoice(seed, plan, project, customer, sales_order, index, cyc
         "price_list_currency": plan.currency,
         "plc_conversion_rate": 1,
         "debit_to": _account(plan, "default_receivable_account"),
-        "cost_center": seed.default_cost_center(plan.name),
+        "cost_center": frappe.db.get_value("Project", project, "cost_center"),
         "payment_terms_template": "DEMO Construction 95pct + 5pct Retention",
         "remarks": (
             f"DEMO progress #{cycle}: contract {sales_order.name}; "
@@ -141,7 +141,7 @@ def _ensure_purchase_invoice(seed, plan, project, supplier, subcontract, index, 
         "price_list_currency": plan.currency,
         "plc_conversion_rate": 1,
         "credit_to": _account(plan, "default_payable_account"),
-        "cost_center": seed.default_cost_center(plan.name),
+        "cost_center": frappe.db.get_value("Project", project, "cost_center"),
         "remarks": "DEMO ONLY: fictional subcontractor progress expense.",
         "items": __subcontract_lines(seed, plan, subcontract, amount, cycle),
     })
