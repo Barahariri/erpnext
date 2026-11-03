@@ -71,7 +71,11 @@ cat > apps.json <<'APPS'
 APPS
 
 echo "Building image first; existing containers stay running until this succeeds."
-DOCKER_BUILDKIT=1 docker build \
+build_cache_flags=()
+if [[ "${DEMO_NO_CACHE:-0}" == "1" ]]; then
+  build_cache_flags+=(--no-cache)
+fi
+DOCKER_BUILDKIT=1 docker build "${build_cache_flags[@]}" \
   --build-arg=FRAPPE_PATH=https://github.com/frappe/frappe \
   --build-arg=FRAPPE_BRANCH=version-16 \
   --secret=id=apps_json,src=apps.json \
