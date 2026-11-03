@@ -301,6 +301,23 @@ class ConstructionDemo:
                 + ", ".join(still_missing)
             )
 
+        root_territory = frappe.db.get_value(
+            "Territory", {"is_group": 1, "parent_territory": ["is", "not set"]}, "name"
+        )
+        if not root_territory:
+            frappe.throw("No root Territory after ERPNext fixture setup")
+        for plan in COMPANIES:
+            self.ensure(
+                "Territory",
+                {"territory_name": plan.country},
+                {
+                    "territory_name": plan.country,
+                    "parent_territory": root_territory,
+                    "is_group": 0,
+                },
+            )
+        frappe.db.commit()
+
     def _warehouse_types(self):
         """ERPNext 16 Company.on_update creates a Goods In Transit warehouse.
 
@@ -364,13 +381,24 @@ class ConstructionDemo:
             label = self.customer_label(plan, i)
             self.ensure(
                 "Customer", {"customer_name": label},
-                {"customer_name": label, "customer_type": "Company", "naming_series": "CUST-.YYYY.-"},
+                {
+                    "customer_name": label,
+                    "customer_type": "Company",
+                    "customer_group": "Commercial",
+                    "territory": plan.country,
+                    "naming_series": "CUST-.YYYY.-",
+                },
             )
         for i in range(1, scaled(plan.suppliers, self.scale) + 1):
             label = self.supplier_label(plan, i)
             self.ensure(
                 "Supplier", {"supplier_name": label},
-                {"supplier_name": label, "supplier_type": "Company", "naming_series": "SUP-.YYYY.-"},
+                {
+                    "supplier_name": label,
+                    "supplier_type": "Company",
+                    "supplier_group": "Local",
+                    "naming_series": "SUP-.YYYY.-",
+                },
             )
 
     def _materials(self):
