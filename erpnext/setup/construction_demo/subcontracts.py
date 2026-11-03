@@ -6,7 +6,7 @@ from decimal import Decimal
 import frappe
 from frappe.utils import add_months, getdate
 
-from erpnext.setup.construction_demo.config import START_DATE, scaled
+from erpnext.setup.construction_demo.config import START_DATE, billing_cycles, scaled
 
 SUBCONTRACT_WEIGHTS = (
     ("الحفر والتهيئة / Earthworks", "0.35"),
@@ -29,7 +29,7 @@ def contract_amount(plan, index, start):
     multiplier = {"KRC": 1, "RDC": 10, "MSE": 100000}[plan.abbr]
     subtotal = Decimal("0")
     cutoff = getdate("2026-10-31")
-    for cycle in range(1, 9):
+    for cycle in range(1, billing_cycles(plan, index) + 1):
         posting = add_months(start, (cycle - 1) * 2).replace(day=15)
         if posting > cutoff:
             continue
