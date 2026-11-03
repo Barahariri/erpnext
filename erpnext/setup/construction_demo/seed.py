@@ -246,6 +246,61 @@ class ConstructionDemo:
                 },
             )
 
+    def _standard_erpnext_fixtures(self):
+        """Initialize standard ERPNext setup records on a blank test site.
+
+        Bench reinstall/install-app do NOT run the Setup Wizard stages.
+        Without these fixtures, Company/Item/Customer/Supplier/Stock Entry
+        validators fail (Transit warehouse, root Item/Customer/Supplier
+        Groups, Territories, Nos UOM, Stock Entry Type and payment modes).
+        This is gated by the main site's DEMO opt-in, and never called
+        during the read-only preview.
+        """
+        from erpnext.setup.setup_wizard.operations import install_fixtures
+
+        required = {
+            "Item Group": "All Item Groups",
+            "Customer Group": "All Customer Groups",
+            "Supplier Group": "All Supplier Groups",
+            "Territory": "All Territories",
+            "Warehouse Type": "Transit",
+            "UOM": "Nos",
+            "Stock Entry Type": "Material Issue",
+            "Mode of Payment": "Cash",
+        }
+        missing = [
+            f"{doctype}: {name}"
+            for doctype, name in required.items()
+            if not frappe.db.exists(doctype, name)
+        ]
+        if missing:
+            # Native ERPNext v16 fixture installer is duplicate-tolerant.
+            # Kuwait is the demo group's primary reporting headquarters.
+            install_fixtures.install("Kuwait")
+            frappe.db.commit()
+            self.warnings.append(
+                "Initialized missing native ERPNext Setup Wizard fixtures: "
+                + ", ".join(missing)
+            )
+
+        # Frappe translations can name the root Item Group differently.
+        # Ensure the business-specific parent is selected dynamically.
+        if not frappe.db.get_value(
+            "Item Group", {"is_group": 1, "parent_item_group": ["is", "not set"]}, "name"
+        ):
+            frappe.throw("ERPNext Item Group root missing after fixture setup")
+
+        still_missing = [
+            f"{doctype}: {name}"
+            for doctype, name in required.items()
+            if not frappe.db.exists(doctype, name)
+        ]
+        if still_missing:
+            frappe.throw(
+                "ERPNext basic setup incomplete after official fixture install: "
+                + ", ".join(still_missing)
+            )
+
     def _warehouse_types(self):
         """ERPNext 16 Company.on_update creates a Goods In Transit warehouse.
 
@@ -267,6 +322,7 @@ class ConstructionDemo:
         frappe.db.commit()
 
     def setup(self) -> None:
+        self._standard_erpnext_fixtures()
         self._warehouse_types()
         self._fiscal_years()
         for plan in COMPANIES:
@@ -318,6 +374,12 @@ class ConstructionDemo:
             )
 
     def _materials(self):
+        from frappe.utils.nestedset import get_root_of
+
+        root_item_group = get_root_of("Item Group")
+        if not root_item_group:
+            frappe.throw("Missing top-level Item Group: run setup phase first")
+
         # Work progress is naturally fractional; ERPNext "Nos" rejects
         # decimal percentages when its UOM requires whole numbers.
         self.ensure(
@@ -329,7 +391,7 @@ class ConstructionDemo:
             {"item_group_name": "DEMO Construction Materials"},
             {
                 "item_group_name": "DEMO Construction Materials",
-                "parent_item_group": "All Item Groups",
+                "parent_item_group": root_item_group,
                 "is_group": 0,
             },
         )
@@ -338,7 +400,7 @@ class ConstructionDemo:
             {"item_group_name": "DEMO Construction Services"},
             {
                 "item_group_name": "DEMO Construction Services",
-                "parent_item_group": "All Item Groups",
+                "parent_item_group": root_item_group,
                 "is_group": 0,
             },
         )
