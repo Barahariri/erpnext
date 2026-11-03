@@ -421,6 +421,7 @@ class ConstructionDemo:
                     "is_group": 0,
                 },
             )
+            from erpnext.setup.construction_demo.contracts import expected_value
             project = self.ensure(
                 "Project",
                 {"project_name": label, "company": plan.name},
@@ -432,7 +433,7 @@ class ConstructionDemo:
                     "expected_start_date": start,
                     "expected_end_date": finish,
                     "status": "Completed" if finish < getdate("2026-10-31") else "Open",
-                    "estimated_costing": (30000 + 17000 * i) * (3 if plan.abbr == "RDC" else 1),
+                    "estimated_costing": round(expected_value(plan, i, start) * 0.78, 2),
                     "notes": f"DEMO ONLY | {spec.name} | {spec.district} | {spec.scope}",
                     "custom_demo_district": spec.district,
                     "custom_demo_scope": spec.scope,
@@ -476,7 +477,7 @@ class ConstructionDemo:
             frappe.db.commit()
 
     def assets(self) -> None:
-        """Create fixed-asset equipment as DRAFT; no unbalanced GL entries."""
+        """Create funded, submitted synthetic equipment with depreciation and IDs."""
         if not frappe.db.exists("Item Group", {"item_group_name": "DEMO Construction Materials"}):
             frappe.throw("Run phase=masters before assets")
         from erpnext.setup.construction_demo.equipment import seed_equipment
