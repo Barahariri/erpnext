@@ -93,7 +93,7 @@ def ensure_sales_order(seed, plan, project, customer, index, start):
             "rate": float(row_amount / 100),
             "delivery_date": add_months(start, 20),
             "project": project,
-            "cost_center": seed.default_cost_center(plan.name),
+            "cost_center": seed.project_cost_center(plan, index),
         })
     from erpnext.setup.construction_demo.taxes import apply_taxes
 
@@ -115,7 +115,7 @@ def ensure_sales_order(seed, plan, project, customer, index, start):
         "price_list_currency": plan.currency,
         "plc_conversion_rate": 1,
         "payment_terms_template": payment_terms(seed),
-        "cost_center": seed.default_cost_center(plan.name),
+        "cost_center": seed.project_cost_center(plan, index),
         "items": items,
     })
     # Contract itself follows actual-country no-VAT status: simulated tax
@@ -146,7 +146,7 @@ def progress_lines(seed, plan, sales_order, period_amount):
             "sales_order": sales_order.name,
             "so_detail": row.name,
             "project": sales_order.project,
-            "cost_center": seed.default_cost_center(plan.name),
+            "cost_center": frappe.db.get_value("Project", sales_order.project, "cost_center"),
             "income_account": frappe.db.get_value(
                 "Company", plan.name, "default_income_account",
             ),
