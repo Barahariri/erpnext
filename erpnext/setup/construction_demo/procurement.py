@@ -10,7 +10,7 @@ from datetime import timedelta
 import frappe
 from frappe.utils import add_days, add_months, getdate
 
-from erpnext.setup.construction_demo.config import COMPANIES, START_DATE, END_DATE, scaled
+from erpnext.setup.construction_demo.config import COMPANIES, START_DATE, END_DATE, MATERIAL_COUNT, PROJECT_CATALOG, scaled
 
 
 def _get_doc(doctype: str, filters: dict):
@@ -27,10 +27,13 @@ def _supplier(seed, plan, index):
 
 
 def _site_warehouse(plan, index):
-    site = plan.sites[index % len(plan.sites)]
+    site = PROJECT_CATALOG[plan.abbr][index - 1].district
     name = frappe.db.get_value(
         "Warehouse",
-        {"warehouse_name": "DEMO " + plan.abbr + " " + site, "company": plan.name},
+        {
+            "warehouse_name": f"DEMO {plan.abbr} PROJECT {index:03d} {site}",
+            "company": plan.name,
+        },
         "name",
     )
     if not name:
@@ -51,7 +54,7 @@ def _purchase_order(seed, plan, project, index, month, posting):
     supplier = _supplier(seed, plan, index + month)
     multiplier = {"KRC": 1, "RDC": 10, "MSE": 100000}[plan.abbr]
     items = []
-    material_total = scaled(1200, seed.scale)
+    material_total = scaled(MATERIAL_COUNT, seed.scale)
     for j in range(5):
         code = f"DEMO-MAT-{1 + ((index * 23 + month * 17 + j * 31) % material_total):04d}"
         items.append({
