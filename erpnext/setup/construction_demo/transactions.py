@@ -64,7 +64,7 @@ def _invoice_key(plan, index: int, cycle: int, kind: str) -> str:
     return f"DEMO-{plan.abbr}-PRJ-{index:03d}-{kind}-{cycle:02d}"
 
 
-def _ensure_sales_invoice(seed, plan, project, customer, index, cycle, posting, amount):
+def _ensure_sales_invoice(seed, plan, project, customer, sales_order, index, cycle, posting, amount):
     ref = _invoice_key(plan, index, cycle, "S")
     existing = frappe.db.exists(
         "Sales Invoice", {"company": plan.name, "po_no": ref}
@@ -95,17 +95,16 @@ def _ensure_sales_invoice(seed, plan, project, customer, index, cycle, posting, 
         "plc_conversion_rate": 1,
         "debit_to": _account(plan, "default_receivable_account"),
         "cost_center": seed.default_cost_center(plan.name),
-        "remarks": "DEMO ONLY: synthetic work-progress certificate.",
-        "items": [{
-            "item_code": "DEMO-CONSTRUCTION-SERVICE",
-            "description": f"Progress certificate #{cycle} for {project} (DEMO)",
-            "qty": 1,
-            "rate": amount,
-            "income_account": _account(plan, "default_income_account"),
-            "cost_center": seed.default_cost_center(plan.name),
-            "project": project,
-        }],
+        "payment_terms_template": "DEMO Construction 95pct + 5pct Retention",
+        "remarks": (
+            f"DEMO progress #{cycle}: contract {sales_order.name}; "
+            "5% guarantee retention is a deferred receivable, not a tax."
+        ),
+        "items": __progress_lines(seed, plan, sales_order, amount),
     })
+    from erpnext.setup.construction_demo.taxes import apply_taxes
+    # Real country scenario 0% non-VAT; explicit fictional 5% on test cycles only.
+    apply_taxes(doc, plan, mode=seed.tax_mode, simulated=(cycle % 4 == 0))
     doc.insert(ignore_permissions=True)
     doc.submit()
     seed.created["Sales Invoice"] += 1
@@ -141,16 +140,35 @@ def _ensure_purchase_invoice(seed, plan, project, supplier, index, cycle, postin
         "credit_to": _account(plan, "default_payable_account"),
         "cost_center": seed.default_cost_center(plan.name),
         "remarks": "DEMO ONLY: fictional subcontractor progress expense.",
-        "items": [{
-            "item_code": "DEMO-CONSTRUCTION-SERVICE",
-            "description": f"Subcontractor progress #{cycle} for {project} (DEMO)",
-            "qty": 1,
-            "rate": amount,
-            "expense_account": _account(plan, "default_expense_account"),
-            "cost_center": seed.default_cost_center(plan.name),
-            "project": project,
-        }],
+        "items": [
+            {
+                "item_code": "DEMO-CONSTRUCTION-SERVICE",
+                "description": f"Subcontracted earthworks | DEMO bill {cycle}",
+                "qty": 1, "rate": round(amount * 0.35, 2),
+                "expense_account": _account(plan, "default_expense_account"),
+                "cost_center": seed.default_cost_center(plan.name),
+                "project": project,
+            },
+            {
+                "item_code": "DEMO-CONSTRUCTION-SERVICE",
+                "description": f"Concrete and structural labor | DEMO bill {cycle}",
+                "qty": 1, "rate": round(amount * 0.45, 2),
+                "expense_account": _account(plan, "default_expense_account"),
+                "cost_center": seed.default_cost_center(plan.name),
+                "project": project,
+            },
+            {
+                "item_code": "DEMO-CONSTRUCTION-SERVICE",
+                "description": f"MEP subcontractor labor | DEMO bill {cycle}",
+                "qty": 1, "rate": round(amount * 0.20, 2),
+                "expense_account": _account(plan, "default_expense_account"),
+                "cost_center": seed.default_cost_center(plan.name),
+                "project": project,
+            },
+        ],
     })
+    from erpnext.setup.construction_demo.taxes import apply_taxes
+    apply_taxes(doc, plan, mode=seed.tax_mode, simulated=(cycle % 6 == 0))
     doc.insert(ignore_permissions=True)
     doc.submit()
     seed.created["Purchase Invoice"] += 1
@@ -204,6 +222,12 @@ def _ensure_customer_receipt(seed, plan, invoice, index, cycle, posting, fractio
     seed.created["Payment Entry"] += 1
 
 
+def __progress_lines(seed, plan, order, amount):
+    from erpnext.setup.construction_demo.contracts import progress_lines
+
+    return progress_lines(seed, plan, order, amount)
+
+
 def seed_transactions(seed):
     """Create submitted, linked invoices and example full/partial receipts."""
     end_date = getdate(END_DATE)
@@ -213,6 +237,7 @@ def seed_transactions(seed):
         if not frappe.db.exists("Item", "DEMO-CONSTRUCTION-SERVICE"):
             frappe.throw("Run phase=masters before transactions")
 
+        from erpnext.setup.construction_demo.contracts import ensure_sales_order
         _ensure_opening_cash(seed, plan)
         frappe.db.commit()
         for index in range(1, scaled(plan.projects, seed.scale) + 1):
@@ -235,6 +260,7 @@ def seed_transactions(seed):
                 "Supplier", {"supplier_name": supplier_label}, "name"
             )
             start = add_months(getdate(START_DATE), (index * 7) % 28)
+            order = ensure_sales_order(seed, plan, project, customer, index, start)
             multiplier = {"KRC": 1, "RDC": 10, "MSE": 100000}[plan.abbr]
 
             for cycle in range(1, 9):
@@ -245,7 +271,7 @@ def seed_transactions(seed):
                 revenue = (12_000 + index * 125 + cycle * 290) * multiplier
                 expense = round(revenue * (0.62 + (index % 5) * 0.035), 2)
                 invoice = _ensure_sales_invoice(
-                    seed, plan, project, customer, index, cycle, posting, revenue
+                    seed, plan, project, customer, order, index, cycle, posting, revenue
                 )
                 _ensure_purchase_invoice(
                     seed, plan, project, supplier, index, cycle, posting, expense
@@ -263,6 +289,6 @@ def seed_transactions(seed):
                     )
             frappe.db.commit()
     seed.warnings.append(
-        "Financial sample covers progress invoices and receipts only: no payroll,"
-        " stock ledger, depreciation, subcontract BOQ or supplier-payment simulation yet."
+        "Progress invoices are linked to BOQ Sales Order rows; retention is"
+        " represented in payment terms. Simulator tax percentages are not law."
     )
