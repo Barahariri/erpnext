@@ -27,7 +27,7 @@ Period: 2023-11-01 to 2026-10-31. Sample stock materials: 1,200.
 - Purchase Order -> Receipt -> Purchase Invoice -> Stock Entry (issue to project) -> supplier Payment Entry.
 - Synthetic balanced capital opening Journal Entries and customer receipts with paid/part-paid/unpaid states.
 - Optional Frappe HRMS salary structure, assignment, salary slips, two attendance days/month, leave allocations and aggregate payroll journals.
-- 470 synthetic equipment Asset DRAFTS with distinct serial names and Asset Category (not booked or depreciated).
+- 470 submitted Existing Assets, funded by DEMO in-kind equity or equipment-financing liability Journal Entries, and 60-month depreciation schedules posted to the end of the simulation. Some pending repair records.
 - Dedicated bilingual Sales Invoice print format watermarked as DEMO.
 - Read-only audit for counts, General Ledger balance and unexpected non-simulated tax rates.
 
@@ -49,7 +49,7 @@ Country tax mode (default) generates an informational 0% row, which does NOT imp
 - subcontracts.py — subcontract BOQ order
 - transactions.py — submitted progress and supplier invoices
 - procurement.py — procurement, stock movement, supplier payment
-- equipment.py — fixed-asset master drafts
+- equipment.py — Asset register, synthetic funded acquisition, equipment depreciation and repairs
 - hrms_seed.py — optional payroll and leave simulation
 - audit.py — read-only post-run verification
 
@@ -119,4 +119,4 @@ This is code committed to GitHub, NOT a completed database population on the rem
 
 The generator uses multiple commits; it is deliberately not a single atomic transaction. It is designed to rerun safely with stable DEMO keys, but a fresh disposable site is recommended for a full clean replay.
 
-HRMS salary slips are posted with a separate synthetic aggregate payroll Journal Entry; do NOT run a second Payroll Entry accrual for the same salary slips. Attendance covers two sample days/month and is not a complete daily timesheet. Draft assets have no depreciation/booked capital acquisition. Frappe's full regulatory and country-specific payroll localization has not been implemented. Restrict this mode to isolated testing.
+HRMS salary slips are posted with a separate synthetic aggregate payroll Journal Entry; do NOT run a second Payroll Entry accrual for the same salary slips. Attendance covers two sample days/month and is not a complete daily timesheet. Asset acquisitions are fictional equity/financing Journal Entries, NOT genuine equipment vendor Purchase Invoices or statutory depreciation books. Confirm the asset GL and maintenance results on a disposable site. Frappe's full regulatory and country-specific payroll localization has not been implemented. Restrict this mode to isolated testing.
