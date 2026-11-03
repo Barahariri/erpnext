@@ -44,6 +44,7 @@ def _ensure_opening_cash(seed, plan):
     amount = {"KRC": 3_000_000, "RDC": 15_000_000, "MSE": 900_000_000}[plan.abbr]
     doc = frappe.get_doc({
         "doctype": "Journal Entry",
+        "naming_series": "ACC-JV-.YYYY.-",
         "voucher_type": "Opening Entry",
         "posting_date": START_DATE,
         "company": plan.name,
@@ -77,6 +78,7 @@ def _ensure_sales_invoice(seed, plan, project, customer, index, cycle, posting, 
 
     doc = frappe.get_doc({
         "doctype": "Sales Invoice",
+        "naming_series": "ACC-SINV-.YYYY.-",
         "company": plan.name,
         "customer": customer,
         "project": project,
@@ -124,6 +126,7 @@ def _ensure_purchase_invoice(seed, plan, project, supplier, index, cycle, postin
 
     doc = frappe.get_doc({
         "doctype": "Purchase Invoice",
+        "naming_series": "ACC-PINV-.YYYY.-",
         "company": plan.name,
         "supplier": supplier,
         "project": project,
@@ -173,6 +176,7 @@ def _ensure_customer_receipt(seed, plan, invoice, index, cycle, posting, fractio
         return
     doc = frappe.get_doc({
         "doctype": "Payment Entry",
+        "naming_series": "ACC-PAY-.YYYY.-",
         "payment_type": "Receive",
         "company": plan.name,
         "party_type": "Customer",
