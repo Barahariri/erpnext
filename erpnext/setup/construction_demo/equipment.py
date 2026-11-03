@@ -118,7 +118,7 @@ def _repair(seed, plan, asset, index):
         "asset": asset.name,
         "company": plan.name,
         "cost_center": seed.default_cost_center(plan.name),
-        "failure_date": add_months(getdate(asset.purchase_date), 9),
+        "failure_date": min(add_months(getdate(asset.purchase_date), 9), getdate(END_DATE)),
         "repair_status": "Pending",
         "repair_cost": round(float(asset.net_purchase_amount or 0) * 0.005, 2),
         "description": marker,
