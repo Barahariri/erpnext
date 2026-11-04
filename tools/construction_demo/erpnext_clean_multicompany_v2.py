@@ -398,8 +398,26 @@ def master_groups():
     frappe.db.commit()
 
 
+def setup_company_price_lists(d):
+    """Create matching-currency lists required by ERPNext v16 Sales Order/Invoice."""
+    for side in ("Selling", "Buying"):
+        title = f"DEMO {d['abbr']} {side}"
+        fields = {
+            "price_list_name": title, "currency": d["currency"],
+            "selling": int(side == "Selling"), "buying": int(side == "Buying"),
+            "enabled": 1,
+        }
+        list_id = ensure("Price List", {"price_list_name": title}, fields)
+        doc = frappe.get_doc("Price List", list_id)
+        if (doc.currency != d["currency"]
+                or int(doc.selling or 0) != fields["selling"]
+                or int(doc.buying or 0) != fields["buying"]):
+            raise RuntimeError("Conflicting demo price list: " + title)
+
+
 def company_masters(d):
     company = d["company"]
+    setup_company_price_lists(d)
     for customer in d["clients"]:
         ensure("Customer", {"customer_name": customer}, {
             "customer_name": customer, "customer_type": "Company", "customer_group": frappe.db.get_value("Customer Group", {"is_group": 0}, "name"),
@@ -476,6 +494,9 @@ def transaction_samples(d):
                 "doctype": "Sales Order", "company": c, "customer": client,
                 "transaction_date": "2026-06-01", "delivery_date": "2027-05-31",
                 "po_no": code, "currency": d["currency"], "conversion_rate": 1,
+                "selling_price_list": f"DEMO {d['abbr']} Selling",
+                "price_list_currency": d["currency"], "plc_conversion_rate": 1,
+                "ignore_pricing_rule": 1,
                 "items": [{
                     "item_code": "SRV-PROGRESS", "qty": 4, "rate": round(budget / 4, 2),
                     "delivery_date": "2027-05-31", "project": prj,
@@ -496,11 +517,18 @@ def transaction_samples(d):
                 "doctype": "Sales Invoice", "company": c, "customer": client,
                 "posting_date": "2026-08-31", "due_date": "2026-09-30",
                 "currency": d["currency"], "conversion_rate": 1,
+                "selling_price_list": f"DEMO {d['abbr']} Selling",
+                "price_list_currency": d["currency"], "plc_conversion_rate": 1,
+                "ignore_pricing_rule": 1,
+                "debit_to": frappe.db.get_value(
+                    "Account", {"company": c, "account_name": "Certified Contract Receivables", "is_group": 0}, "name"),
+                "cost_center": frappe.db.get_value("Project", prj, "cost_center"),
                 "po_no": inv_marker, "project": prj,
                 "items": [{
                     "item_code": "SRV-PROGRESS", "qty": 1,
                     "rate": round(budget / 4, 2), "income_account": project_income,
-                    "project": prj, "sales_order": order.name,
+                    "project": prj, "cost_center": frappe.db.get_value("Project", prj, "cost_center"),
+                    "sales_order": order.name,
                     "so_detail": order.items[0].name,
                 }],
             })
@@ -521,6 +549,9 @@ def transaction_samples(d):
                 "transaction_date": "2026-07-01", "schedule_date": "2026-08-01",
                 "order_confirmation_no": po_marker,
                 "currency": d["currency"], "conversion_rate": 1,
+                "buying_price_list": f"DEMO {d['abbr']} Buying",
+                "price_list_currency": d["currency"], "plc_conversion_rate": 1,
+                "ignore_pricing_rule": 1,
                 "items": [{"item_code": item_code, "qty": 30 + i * 10,
                            "rate": round(budget / 2200, 2), "schedule_date": "2026-08-01", "project": prj}],
             })
@@ -540,6 +571,9 @@ def transaction_samples(d):
                 "transaction_date": "2026-07-01", "schedule_date": "2026-09-15",
                 "order_confirmation_no": sub_marker,
                 "currency": d["currency"], "conversion_rate": 1,
+                "buying_price_list": f"DEMO {d['abbr']} Buying",
+                "price_list_currency": d["currency"], "plc_conversion_rate": 1,
+                "ignore_pricing_rule": 1,
                 "items": [{"item_code": "SRV-SUBCON", "qty": 1,
                            "rate": round(budget * .20, 2), "schedule_date": "2026-09-15", "project": prj}],
             })
