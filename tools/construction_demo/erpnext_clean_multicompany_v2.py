@@ -515,7 +515,8 @@ def transaction_samples(d):
         else:
             si = frappe.get_doc({
                 "doctype": "Sales Invoice", "company": c, "customer": client,
-                "posting_date": "2026-08-31", "due_date": "2026-09-30",
+                "posting_date": "2026-08-31", "posting_time": "12:00:00",
+                "set_posting_time": 1, "due_date": "2026-09-30",
                 "currency": d["currency"], "conversion_rate": 1,
                 "selling_price_list": f"DEMO {d['abbr']} Selling",
                 "price_list_currency": d["currency"], "plc_conversion_rate": 1,
