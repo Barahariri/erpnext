@@ -47,6 +47,8 @@ assert bs.count('"buying_price_list":') >= 2, "V2 Purchase Order price lists abs
 assert vs.count('"selling_price_list":') >= 1, "V3 Sales Invoice price list absent"
 assert vs.count('"buying_price_list":') >= 3, "V3 purchasing price lists absent"
 assert '"debit_to": frappe.db.get_value(' in bs, "V2 Sales Invoice receivable account absent"
+assert '"posting_date": "2026-08-31", "posting_time": "12:00:00"' in bs, "V2 historical Sales Invoice posting time absent"
+assert '"set_posting_time": 1, "due_date": "2026-09-30"' in bs, "V2 backdated invoice will reset to current date"
 assert 'update_account_number(row.name' not in bs, "Per-account renaming regression"
 for path in (B, V):
     compile(path.read_text(encoding="utf-8"), str(path), "exec")
