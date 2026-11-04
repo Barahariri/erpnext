@@ -249,53 +249,92 @@ def company_setup(d):
 
 
 def number_accounts(d):
-    """Number standard accounts using the ERPNext supported update/rename API.
+    """Number the actual Account.account_number field without renaming Account IDs.
 
-    Root names are intentionally left stable; root account_number is assigned
-    directly because renaming the root may be forbidden by ERPNext.
-    This step must be executed only with a clean, transaction-free chart.
+    This isolated demo has no GL entries at this stage. The official account
+    renaming API scans/updates references throughout Frappe and can take hours
+    when called once for every account. No renamed Account ID is needed to store
+    a valid Account Number. Keep existing Link targets stable and set the field
+    directly with validation and an audit. This is NOT for production renumbering.
     """
     company = d["company"]
-    # Do not renumber a company after any GL activity; no silent risky edits.
-    gl = frappe.db.count("GL Entry", {"company": company, "is_cancelled": 0})
-    if gl:
-        # On idempotent reruns, accounts must already have complete numbering.
-        missing = frappe.db.count("Account", {"company": company, "account_number": ["in", ["", None]]})
-        if missing:
-            raise RuntimeError(f"{company}: unnumbered accounts with existing GL: manual review required")
-        return
+    expected = {v["company"] for v in DATA}
+    if company not in expected:
+        raise RuntimeError("Unexpected company in chart numbering: " + company)
 
     roots = {"Asset": 100000, "Liability": 200000, "Equity": 300000,
              "Income": 400000, "Expense": 500000}
-    special = {g for _, g, _, _ in COA}
-    special.update({g + i for _, g, _, leaves in COA for i in range(1, len(leaves) + 1)})
-    docs = frappe.get_all("Account", filters={"company": company},
-                          fields=["name", "account_name", "account_number", "root_type", "parent_account", "is_group"],
-                          order_by="lft asc")
+    reserved = {g for _, g, _, _ in COA}
+    reserved.update(g + i for _, g, _, leaves in COA
+                    for i in range(1, len(leaves) + 1))
+
+    docs = frappe.get_all(
+        "Account",
+        filters={"company": company},
+        fields=["name", "account_name", "account_number", "root_type",
+                "parent_account", "is_group"],
+        order_by="lft asc",
+    )
+    if not docs:
+        raise RuntimeError("Missing standard chart of accounts for " + company)
+
+    # Validate the entire existing numbering *before* touching anything.
+    taken = set()
+    unnumbered = []
+    for row in docs:
+        raw = str(row.account_number or "").strip()
+        if not raw:
+            unnumbered.append(row)
+            continue
+        if len(raw) != 6 or not raw.isdigit():
+            raise RuntimeError(f"{company}: invalid existing Account Number {raw}: {row.name}")
+        n = int(raw)
+        base = roots.get(row.root_type)
+        if base is None or not base <= n < base + 100000:
+            raise RuntimeError(f"{company}: wrong numbering family {raw}: {row.name}")
+        if n in taken:
+            raise RuntimeError(f"{company}: duplicate Account Number {raw}")
+        taken.add(n)
+
+    if frappe.db.count("GL Entry", {"company": company, "is_cancelled": 0}):
+        if unnumbered:
+            raise RuntimeError(
+                f"{company}: {len(unnumbered)} unnumbered accounts with posted GL; "
+                "manual accounting review required"
+            )
+        return
+
     for root_type, base in roots.items():
         group = [r for r in docs if r.root_type == root_type]
-        if not group:
-            raise RuntimeError("Missing standard ERPNext account root: " + company + "/" + root_type)
-        roots_only = [r for r in group if not r.parent_account]
-        if len(roots_only) != 1:
-            raise RuntimeError("Invalid standard account root tree: " + company + "/" + root_type)
-        for i, row in enumerate(group):
-            # Special construction accounts already carry reserved six-digit numbers.
-            if row.account_name in {x[2] for x in COA} or (str(row.account_number or "").isdigit() and int(row.account_number) in special):
+        if not group or len([r for r in group if not r.parent_account]) != 1:
+            raise RuntimeError(f"{company}: invalid or missing {root_type} account tree")
+
+    changes = 0
+    for root_type, base in roots.items():
+        group = [r for r in docs if r.root_type == root_type]
+        for index, row in enumerate(group):
+            if str(row.account_number or "").strip():
                 continue
-            n = str(base if not row.parent_account else base + 100 + i * 10)
-            if int(n) >= base + 19000:
-                raise RuntimeError("Standard chart account numbering range exhausted")
-            if row.account_number == n:
-                continue
-            conflict = frappe.db.get_value("Account", {"company": company, "account_number": n, "name": ["!=", row.name]}, "name")
-            if conflict:
-                raise RuntimeError("Account number collision: " + company + " / " + n + " / " + conflict)
-            if not row.parent_account:
-                frappe.db.set_value("Account", row.name, "account_number", n, update_modified=False)
-            else:
-                update_account_number(row.name, row.account_name, n)
+            number = base if not row.parent_account else base + 100 + index * 10
+            # On interrupted/resumed runs some numbers may have been assigned.
+            # Never overwrite existing Account Numbers or reserved contractor slots.
+            while number in taken or number in reserved:
+                number += 1
+            if number >= base + 19000:
+                raise RuntimeError(f"{company}: standard number range exhausted ({root_type})")
+            # Account Number is a real ERPNext field. Keeping Account.name
+            # unchanged also preserves all existing Account Links.
+            frappe.db.set_value("Account", row.name, "account_number",
+                                str(number), update_modified=False)
+            taken.add(number)
+            changes += 1
     frappe.db.commit()
+    remaining = frappe.db.count("Account", {
+        "company": company, "account_number": ["in", ["", None]]
+    })
+    if remaining:
+        raise RuntimeError(f"{company}: {remaining} Account Numbers still missing")
+    print(f"NUMBERED: {company} total={len(docs)} newly_numbered={changes}", flush=True)
 
 
 def root_account(company, root_type):
