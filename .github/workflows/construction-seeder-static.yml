@@ -1,0 +1,24 @@
+name: Construction Seeder Source Checks
+on:
+  push:
+    branches:
+      - feature/construction-complete-seeder-v3
+    paths:
+      - 'tools/construction_demo/**'
+      - '.github/workflows/construction-seeder-static.yml'
+  pull_request:
+    paths:
+      - 'tools/construction_demo/**'
+      - '.github/workflows/construction-seeder-static.yml'
+jobs:
+  source-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax and static contracts
+        run: |
+          cd tools/construction_demo
+          python3 -m py_compile erpnext_clean_multicompany_v2.py erpnext_complete_v3.py verify_kit_static.py
+          python3 verify_kit_static.py
+      - name: Shell syntax
+        run: bash -n tools/construction_demo/run_from_git.sh
