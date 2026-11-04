@@ -172,6 +172,9 @@ def month_invoice(d, project_index, month_index):
         "naming_series": "ACC-SINV-.YYYY.-", "company": company, "customer": so_doc.customer,
         "posting_date": day, "posting_time": "12:00:00", "set_posting_time": 1,
         "due_date": next_date(day, 30), "currency": currency, "conversion_rate": 1,
+        "selling_price_list": f"DEMO {abbr} Selling",
+        "price_list_currency": currency, "plc_conversion_rate": 1,
+        "ignore_pricing_rule": 1,
         "project": project.name, "cost_center": project.cost_center,
         "po_no": marker, "po_date": day, "debit_to": account(d, account_type="Receivable"),
         "items": [{
@@ -202,6 +205,9 @@ def month_subcontract_invoice(d, project_index, month_index):
         "set_posting_time": 1, "due_date": next_date(day, 30), "bill_date": day,
         "bill_no": bill_no, "project": project.name, "cost_center": project.cost_center,
         "currency": currency, "conversion_rate": 1,
+        "buying_price_list": f"DEMO {abbr} Buying",
+        "price_list_currency": currency, "plc_conversion_rate": 1,
+        "ignore_pricing_rule": 1,
         "credit_to": account(d, account_type="Payable"),
         "items": [{
             "item_code": "SRV-SUBCON", "qty": .25, "rate": round(amount, 2),
@@ -231,7 +237,11 @@ def month_material_receipt(d, project_index):
         "naming_series": "MAT-PRE-.YYYY.-", "company": company,
         "supplier": po_doc.supplier, "supplier_delivery_note": ref,
         "posting_date": day, "posting_time": "10:00:00", "set_posting_time": 1,
-        "currency": currency, "conversion_rate": 1, "project": project.name,
+        "currency": currency, "conversion_rate": 1,
+        "buying_price_list": f"DEMO {abbr} Buying",
+        "price_list_currency": currency, "plc_conversion_rate": 1,
+        "ignore_pricing_rule": 1,
+        "project": project.name,
         "cost_center": project.cost_center,
         "items": [{
             "item_code": line.item_code, "qty": line.qty, "received_qty": line.qty,
@@ -257,6 +267,9 @@ def month_material_invoice(d, project_index, receipt):
         "supplier": receipt.supplier, "bill_no": bill_no, "bill_date": day,
         "posting_date": day, "posting_time": "15:00:00", "set_posting_time": 1,
         "due_date": next_date(day, 30), "currency": d["currency"], "conversion_rate": 1,
+        "buying_price_list": f"DEMO {abbr} Buying",
+        "price_list_currency": d["currency"], "plc_conversion_rate": 1,
+        "ignore_pricing_rule": 1,
         "project": project.name, "cost_center": project.cost_center,
         "credit_to": account(d, account_type="Payable"),
         "items": [{
