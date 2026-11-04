@@ -40,6 +40,14 @@ assert all(100000 <= v < 600000 for v in nums)
 assert months == ("2026-09", "2026-10", "2026-11")
 assert days == (18, 16, 1)
 assert days[-1]+3 <= 4, "November banking transaction is dated after Nov 4"
+# Source contract for ERPNext v16 mandatory Sales Order/Invoice pricing fields.
+assert "def setup_company_price_lists(d):" in bs
+assert bs.count('"selling_price_list":') >= 2, "V2 Sales Order/Invoice price lists absent"
+assert bs.count('"buying_price_list":') >= 2, "V2 Purchase Order price lists absent"
+assert vs.count('"selling_price_list":') >= 1, "V3 Sales Invoice price list absent"
+assert vs.count('"buying_price_list":') >= 3, "V3 purchasing price lists absent"
+assert '"debit_to": frappe.db.get_value(' in bs, "V2 Sales Invoice receivable account absent"
+assert 'update_account_number(row.name' not in bs, "Per-account renaming regression"
 for path in (B, V):
     compile(path.read_text(encoding="utf-8"), str(path), "exec")
 runner = (ROOT / "run_from_git.sh").read_text()
