@@ -75,6 +75,25 @@ bash /root/erpnext-seeder-src/tools/construction_demo/run_from_git.sh --audit
 - لا تنقل بيانات التجربة إلى نظام إنتاج حقيقي.
 
 
+## إصلاح خطأ Sales Order في ERPNext v16
+
+في محاولة سابقة أنشأت Phase 1 الشركات الثلاث والحسابات والمشاريع والموظفين، ثم توقفت عند:
+`frappe.exceptions.MandatoryError: selling_price_list, price_list_currency, plc_conversion_rate`.
+
+أُضيفت قوائم بيع وشراء لكل شركة بعملتها (`DEMO AMQ/AFK/ALS Selling/Buying`) وأصبحت تعبئة هذه الحقول صريحة في أوامر البيع وفواتير البيع وعمليات الشراء، إضافة إلى حساب الذمم ومركز تكلفة المشروع في فاتورة V2.
+
+**بعد التأكد من أن Seeder القديمة توقفت**، اسحب آخر تحديث وأعد تشغيل نفس Runner. لا تمسح البيانات التي نجحت؛ السكربت يستخدم مفاتيح تعريف ثابتة ويعيد فحصها، مع تقرير نهائي يرفض إعلان الجاهزية عند وجود نواقص.
+
+```bash
+set -e
+git -C /root/erpnext-seeder-src pull --ff-only origin feature/construction-complete-seeder-v3
+cd /root/erpnext-seeder-src/tools/construction_demo
+python3 verify_kit_static.py
+bash run_from_git.sh
+```
+
+**هذه مراجعة للمصدر وليست إثباتًا بتنفيذ البيانات على الخادم.** إذا ظهر خطأ جديد يجب إرسال أول Traceback دون إعادة تشغيل متوازية.
+
 ## إصلاح تعليق مرحلة Account Numbering في V3
 
 إذا توقف الإصدار القديم عند `=== Phase 1` وكانت الشركات الثلاث موجودة لكن الحسابات القياسية بلا أرقام، **لا تشغّل Seeder ثانية بالتوازي**. أُصلحت خوارزمية الترقيم في هذا الـBranch: تُكتب أرقام الحسابات مباشرةً في `Account.account_number` في قاعدة DEMO الجديدة الخالية من قيود GL، من دون إعادة تسمية معرفات الحسابات المرتبطة بالمستندات. هذه ليست عملية إعادة ترقيم معتمدة للإنتاج.
